@@ -13,11 +13,11 @@ English one-liner: *Personal Nuclei / Semgrep / Trivy / ClamAV scanner with a fa
 
 ## Демо
 
-Короткий ролик (~2 мин): что умеет сканер и как его запустить (Docker, `.env`, Telegram, CLI).
+![Превью: запуск сканера](docs/demo.gif)
 
-[▶ Смотреть демо (MP4, ~5 МБ)](docs/demo.mp4)
+Полный ролик (~2 мин) открывается в браузере:
 
-[![Кадр из демо](docs/demo/01-title.png)](docs/demo.mp4)
+**[▶ Смотреть демо](https://github.com/akoffice933-maker/security-scan-bot/releases/download/demo/demo.mp4)**
 
 ---
 
