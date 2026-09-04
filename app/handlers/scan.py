@@ -77,8 +77,11 @@ async def _start_scan(
 async def start_site(message: Message, state: FSMContext) -> None:
     await state.set_state(ScanStates.waiting_url)
     await message.answer(
-        "Пришли URL (http/https) или свой публичный IP из ALLOWED_IPS.\n"
-        "Чужие сайты сканировать нельзя.",
+        "Можно прислать:\n"
+        "• URL — <code>https://твой-домен.ru</code> (домен в ALLOWED_DOMAINS)\n"
+        "• IP — голый адрес или <code>https://10.0.0.5/</code> "
+        "(точный IP в ALLOWED_IPS или ALLOWED_DOMAINS)\n\n"
+        "Чужие сайты и 127.0.0.1 сканировать нельзя.",
         reply_markup=cancel_kb(),
     )
 

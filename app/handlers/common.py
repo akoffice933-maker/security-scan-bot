@@ -22,16 +22,19 @@ router = Router(name="common")
 WELCOME = (
     "Привет. Я проверяю <b>только твои</b> проекты.\n\n"
     "Сканировать чужие сайты, репозитории и образы — нельзя и, скорее всего, незаконно.\n"
-    "Работают только домены и публичные IP, GitHub-организации и Docker-registry из whitelist.\n\n"
+    "Можно: домен из <code>ALLOWED_DOMAINS</code>, IP из <code>ALLOWED_IPS</code> "
+    "(или тот же IP в списке доменов), GitHub-орг и Docker-registry из whitelist.\n\n"
     "Выбери, что проверить."
 )
 
 HELP = (
     "<b>Как пользоваться</b>\n"
-    "• Сайт — Nuclei по URL из whitelist доменов\n"
+    "• Сайт / IP — Nuclei по URL <b>или по IP</b> из whitelist "
+    "(голый адрес, например <code>10.0.0.5</code>, или <code>https://10.0.0.5/</code>)\n"
     "• GitHub — clone + Semgrep + Trivy + Bandit + ClamAV\n"
     "• Архив — распаковка с защитой от zip-slip, те же сканеры\n"
     "• Docker — Trivy image по registry из whitelist\n\n"
+    "127.0.0.1 и cloud metadata нельзя даже из списка. Чужие хосты — нельзя.\n"
     "В чат попадают важные находки. Полный отчёт — PDF / HTML / Markdown / JSON.\n"
     "/cancel — отменить текущий шаг."
 )

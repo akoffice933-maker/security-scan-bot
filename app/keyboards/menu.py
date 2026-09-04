@@ -5,7 +5,7 @@ from aiogram.types import (
     ReplyKeyboardMarkup,
 )
 
-BTN_SITE = "🔍 Проверить сайт"
+BTN_SITE = "🔍 Проверить сайт / IP"
 BTN_REPO = "📁 Проверить код (GitHub)"
 BTN_ARCHIVE = "📦 Проверить архив с кодом"
 BTN_DOCKER = "🐳 Проверить Docker-образ"
