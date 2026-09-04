@@ -17,11 +17,11 @@ METADATA_HOSTS = {
 
 MAX_URL_LENGTH = 2048
 GITHUB_RE = re.compile(
-    r"^(?:https://github\.com/)?([A-Za-z0-9][A-Za-z0-9_.-]*)/([A-Za-z0-9][A-Za-z0-9_.]*)(?:\.git)?/?$",
+    r"^(?:https://github\.com/)?([A-Za-z0-9][A-Za-z0-9_.-]*)/([A-Za-z0-9][A-Za-z0-9_.-]*)(?:\.git)?/?$",
     re.IGNORECASE,
 )
 IMAGE_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._\-/:@]{0,255}$")
-REPO_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.]*$")
+REPO_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 
 def _is_ip(value: str) -> bool:

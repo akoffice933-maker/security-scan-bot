@@ -16,6 +16,7 @@ to test may be illegal.
 - Scanner binaries run via `subprocess` with `shell=False`.
 - Archives are extracted with zip-slip and size checks.
 - Secrets in reports and LLM prompts are masked.
+- Every scan attempt is written to `audit_log` (who / what / when / outcome).
 
 ## Reporting a vulnerability
 

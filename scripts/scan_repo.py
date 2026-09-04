@@ -37,13 +37,16 @@ def main() -> int:
     print("Capabilities:", json.dumps(capabilities(), indent=2))
     ok, reason = allow_repo(args.repo)
     if not ok:
+        audit.write_event(0, "scan_denied", "repo", args.repo, None, reason)
         print(f"DENIED: {reason}", file=sys.stderr)
         return 2
 
     scan_id = history.create_scan(0, "repo", args.repo)
+    audit.write_event(0, "scan_requested", "repo", args.repo, scan_id, "cli")
     result = execute_scan(
         {
             "scan_id": scan_id,
+            "user_id": 0,
             "scan_type": "repo",
             "target": args.repo,
             "chat_id": None,

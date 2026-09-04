@@ -47,6 +47,7 @@ def test_empty_github_whitelist_denies():
 def test_repo_allowlist():
     assert allow_repo("myorg/app", ORGS)[0] is True
     assert allow_repo("https://github.com/myusername/repo.git", ORGS)[0] is True
+    assert allow_repo("myorg/agent-Mr", ORGS)[0] is True
     assert allow_repo("not-my-org/repo", ORGS)[0] is False
     assert allow_repo("git@github.com:myorg/app.git", ORGS)[0] is False
     assert allow_repo("https://gitlab.com/myorg/app", ORGS)[0] is False

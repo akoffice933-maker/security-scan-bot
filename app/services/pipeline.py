@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from app.config import get_settings
-from app.services import history, scanner
+from app.services import audit, history, scanner
 from app.services.findings import ScanResult
 from app.services.export import export_all_formats
 from app.services.llm import summarize_sync
@@ -20,6 +20,7 @@ def execute_scan(payload: dict) -> dict:
     scan_id = int(payload["scan_id"])
     scan_type = str(payload["scan_type"])
     target = str(payload["target"])
+    user_id = int(payload.get("user_id") or 0)
     chat_id = payload.get("chat_id")
     options = payload.get("options") or {}
     progress_message_id = payload.get("progress_message_id")
@@ -28,6 +29,7 @@ def execute_scan(payload: dict) -> dict:
     ok, reason = allow_scan(scan_type, target)
     if not ok:
         history.finish_scan(scan_id, "denied", summary=reason)
+        audit.write_event(user_id, "scan_denied", scan_type, target, scan_id, reason)
         notify_sync(
             chat_id,
             f"⛔ Сканирование отклонено: {reason}",
@@ -41,6 +43,14 @@ def execute_scan(payload: dict) -> dict:
         status = "completed" if result.success else "failed"
         raw = mask_secrets(json.dumps(result.to_dict(), ensure_ascii=False))
         history.finish_scan(scan_id, status, raw_report=raw, summary=summary)
+        audit.write_event(
+            user_id,
+            "scan_completed" if status == "completed" else "scan_failed",
+            scan_type,
+            target,
+            scan_id,
+            f"findings={len(result.findings)} status={status}",
+        )
 
         settings = get_settings()
         out_dir = Path(settings.reports_dir) / f"scan-{scan_id}"
@@ -62,6 +72,7 @@ def execute_scan(payload: dict) -> dict:
     except Exception as exc:
         logger.exception("scan %s failed", scan_id)
         history.finish_scan(scan_id, "failed", summary=str(exc)[:1000])
+        audit.write_event(user_id, "scan_failed", scan_type, target, scan_id, str(exc)[:1000])
         notify_sync(
             chat_id,
             f"❌ Проверка сломалась: {exc}",

@@ -19,7 +19,7 @@ from app.keyboards.menu import (
     main_menu_kb,
     nuclei_profile_kb,
 )
-from app.services import history
+from app.services import audit, history
 from app.services.archive import is_allowed_archive
 from app.services.policy import allow_image, allow_repo, allow_url
 from app.services.queue import enqueue_scan
@@ -52,6 +52,9 @@ async def _start_scan(
     if not await _ensure_capacity(message, user_id):
         return
     scan_id = await asyncio.to_thread(history.create_scan, user_id, scan_type, target)
+    await asyncio.to_thread(
+        audit.write_event, user_id, "scan_requested", scan_type, target, scan_id, ""
+    )
     progress = await message.answer(
         f"⏳ Проверка #{scan_id} запущена.\nЦель: <code>{escape_html(target)}</code>\n"
         "Это может занять несколько минут."
@@ -85,6 +88,10 @@ async def got_url(message: Message, state: FSMContext) -> None:
     url = (message.text or "").strip()
     ok, reason = allow_url(url)
     if not ok:
+        if message.from_user:
+            await asyncio.to_thread(
+                audit.write_event, message.from_user.id, "scan_denied", "url", url, None, reason
+            )
         await message.answer(f"⛔ {reason}", reply_markup=cancel_kb())
         return
     await state.update_data(url=url)
@@ -125,6 +132,10 @@ async def got_repo(message: Message, state: FSMContext) -> None:
     repo = (message.text or "").strip()
     ok, reason = allow_repo(repo)
     if not ok:
+        if message.from_user:
+            await asyncio.to_thread(
+                audit.write_event, message.from_user.id, "scan_denied", "repo", repo, None, reason
+            )
         await message.answer(f"⛔ {reason}", reply_markup=cancel_kb())
         return
     await state.clear()
@@ -149,6 +160,16 @@ async def got_docker(message: Message, state: FSMContext) -> None:
     image = (message.text or "").strip()
     ok, reason = allow_image(image)
     if not ok:
+        if message.from_user:
+            await asyncio.to_thread(
+                audit.write_event,
+                message.from_user.id,
+                "scan_denied",
+                "docker",
+                image,
+                None,
+                reason,
+            )
         await message.answer(f"⛔ {reason}", reply_markup=cancel_kb())
         return
     await state.clear()

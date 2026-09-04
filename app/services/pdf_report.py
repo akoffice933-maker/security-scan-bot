@@ -31,36 +31,42 @@ def generate_pdf_report(
 
     out = Path(path)
     font_path = _font_path()
-    pdf = FPDF(format="A4")
+    pdf = FPDF(format="A4", unit="mm")
+    pdf.set_margins(15, 15, 15)
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
+
     if font_path:
-        pdf.add_font("DejaVu", "", str(font_path))
-        pdf.add_font("DejaVu", "B", str(font_path))
-        font = "DejaVu"
+        pdf.add_font("DejaVu", fname=str(font_path))
+        family = "DejaVu"
+        unicode_ok = True
     else:
-        font = "Helvetica"
+        family = "Helvetica"
+        unicode_ok = False
 
-    def write(text: str, size: int = 11, bold: bool = False) -> None:
-        pdf.set_font(font, "B" if bold and font == "Helvetica" else "", size)
-        if font == "DejaVu":
-            pdf.set_font(font, "", size)
-        safe = mask_secrets(text).encode("latin-1", "replace").decode("latin-1") if font == "Helvetica" else mask_secrets(text)
-        pdf.multi_cell(0, 6, safe)
+    def write(text: str, size: int = 11) -> None:
+        pdf.set_font(family, size=size)
+        raw = mask_secrets(text or "")
+        if not unicode_ok:
+            raw = raw.encode("latin-1", "replace").decode("latin-1")
+        width = pdf.epw
+        if width <= 0:
+            width = 180
+        pdf.multi_cell(width, 6, raw)
 
-    write(f"Security scan #{scan_id}", size=16, bold=True)
+    write(f"Security scan #{scan_id}", size=16)
     write(f"Type: {scan_type}")
     write(f"Target: {target}")
     write(f"Findings: {len(result.findings)} (important: {len(result.important())})")
-    pdf.ln(4)
-    write("Summary", size=13, bold=True)
-    write(summary)
-    pdf.ln(4)
-    write("Findings", size=13, bold=True)
+    pdf.ln(3)
+    write("Summary", size=13)
+    write(summary or "")
+    pdf.ln(3)
+    write("Findings", size=13)
     if not result.findings:
         write("None.")
     for item in result.findings[:80]:
-        write(f"[{item.severity}] {item.scanner}: {item.title}", bold=True)
+        write(f"[{item.severity}] {item.scanner}: {item.title}")
         if item.location:
             write(f"  {item.location}")
         if item.description:
