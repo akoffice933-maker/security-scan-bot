@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "security-scan-bot": {
+      "command": "python",
+      "args": ["-m", "app.mcp_server"],
+      "cwd": "/absolute/path/to/security-scan-bot",
+      "env": {
+        "BOT_TOKEN": "dummy-not-needed-for-mcp",
+        "OPENROUTER_API_KEY": "your-key-if-you-want-llm-explanations",
+        "VIRUSTOTAL_API_KEY": "optional",
+        "ALLOWED_DOMAINS": "example.com,localhost",
+        "ALLOWED_GITHUB_ORGS": "your-github-username",
+        "LLM_ENABLED": "true",
+        "DATABASE_URL": "sqlite+aiosqlite:///./data/bot.db"
+      }
+    }
+  }
+}
