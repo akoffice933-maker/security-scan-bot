@@ -19,6 +19,7 @@ class Finding:
     title: str
     description: str = ""
     location: str = ""
+    impact: str = ""
     extra: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:

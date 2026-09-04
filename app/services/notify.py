@@ -73,6 +73,6 @@ def format_chat_report(summary: str, important_lines: list[str]) -> str:
     if important_lines:
         parts.append("")
         parts.append("<b>Важные находки</b>")
-        for line in important_lines[:15]:
-            parts.append("• " + escape_html(line))
+        for line in important_lines[:12]:
+            parts.append("• " + escape_html(line[:500]))
     return "\n".join(parts)

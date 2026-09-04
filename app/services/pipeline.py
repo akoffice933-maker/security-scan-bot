@@ -7,6 +7,7 @@ from pathlib import Path
 from app.config import get_settings
 from app.services import audit, health, history, scanner
 from app.services.findings import ScanResult
+from app.services.explain import enrich_result
 from app.services.export import export_all_formats
 from app.services.llm import summarize_sync
 from app.services.notify import format_chat_report, notify_sync
@@ -48,6 +49,7 @@ def execute_scan(payload: dict) -> dict:
 
     try:
         result = _dispatch(scan_type, target, options, file_path)
+        enrich_result(result)
         summary = summarize_sync(result, scan_type, target)
         status = "completed" if result.success else "failed"
         raw = mask_secrets(json.dumps(result.to_dict(), ensure_ascii=False))

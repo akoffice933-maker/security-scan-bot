@@ -13,7 +13,8 @@ SYSTEM = (
     "Ты помощник по безопасности. Объясняй находки простым русским языком. "
     "Не выдумывай CVE и не преувеличивай риск. Используй только факты из JSON. "
     "Секреты и ключи не цитируй — они уже скрыты. "
-    "Структура: 1) кратко что произошло 2) что починить сначала 3) что можно отложить. "
+    "По каждой важной находке коротко скажи, чем она опасна (что сможет сделать атакующий). "
+    "Структура: 1) кратко что произошло 2) чем опасны главные дыры 3) что починить сначала. "
     "Если находок нет — так и скажи."
 )
 
@@ -39,7 +40,9 @@ def render_summary(result: ScanResult, scan_type: str, target: str) -> str:
     lines.append("Первые важные:")
     for item in important[:8]:
         loc = f" ({item.location})" if item.location else ""
-        lines.append(f"- [{item.severity}] {item.scanner}: {item.title}{loc}")
+        lines.append(f"- [{item.severity}] {item.title}{loc}")
+        if item.impact:
+            lines.append(f"  Чем опасно: {item.impact}")
     if not important:
         lines.append("Критических/высоких/средних нет — детали в полном отчёте.")
     return mask_secrets("\n".join(lines))
@@ -62,6 +65,7 @@ def summarize_sync(result: ScanResult, scan_type: str, target: str) -> str:
                 "title": f.title,
                 "location": f.location,
                 "description": (f.description or "")[:400],
+                "impact": (f.impact or "")[:400],
             }
             for f in result.findings
             if f.severity in IMPORTANT

@@ -68,9 +68,11 @@ def generate_pdf_report(
     for item in result.findings[:80]:
         write(f"[{item.severity}] {item.scanner}: {item.title}")
         if item.location:
-            write(f"  {item.location}")
+            write(f"  Где: {item.location}")
         if item.description:
-            write(f"  {item.description[:500]}")
+            write(f"  Суть: {item.description[:400]}")
+        if item.impact:
+            write(f"  Чем опасно: {item.impact[:500]}")
         pdf.ln(1)
     pdf.output(str(out))
     return out
