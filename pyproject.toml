@@ -1,9 +1,9 @@
 [project]
 name = "security-scan-bot"
 version = "0.2.0"
-description = "Telegram bot + MCP server for scanning your own projects (Nuclei, Semgrep, Trivy, ClamAV, VirusTotal)"
+description = "Telegram bot + MCP server for scanning your own projects (Nuclei, Semgrep, Trivy, ClamAV, VirusTotal). Fail-closed allowlists. MIT."
 readme = "README.md"
-license = "MIT"
+license = { file = "LICENSE" }
 requires-python = ">=3.12"
 dependencies = [
     "aiogram>=3.13.0",
