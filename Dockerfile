@@ -2,21 +2,21 @@ FROM python:3.12-slim
 
 ARG TARGETARCH=amd64
 ARG NUCLEI_VERSION=3.3.7
-ARG TRIVY_VERSION=0.56.2
+ARG TRIVY_VERSION=0.74.0
+ARG WITH_CLAMAV=0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
         curl \
         ca-certificates \
         unzip \
-        clamav \
-        clamav-freshclam \
-        fonts-dejavu-core \
+    && if [ "${WITH_CLAMAV}" = "1" ]; then \
+         apt-get install -y --no-install-recommends clamav clamav-freshclam \
+         && (freshclam || true); \
+       fi \
     && rm -rf /var/lib/apt/lists/*
 
-RUN freshclam || true
-
-# Nuclei: versioned GitHub release (not /latest/download with a pinned filename)
+# Nuclei: versioned GitHub release. Templates download on first scan, not at build.
 RUN set -eux; \
     case "${TARGETARCH}" in \
       amd64) NARCH=amd64 ;; \
@@ -26,8 +26,7 @@ RUN set -eux; \
     curl -fsSL "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NARCH}.zip" -o /tmp/nuclei.zip; \
     unzip /tmp/nuclei.zip -d /usr/local/bin/; \
     chmod +x /usr/local/bin/nuclei; \
-    rm /tmp/nuclei.zip; \
-    nuclei -update-templates || true
+    rm /tmp/nuclei.zip
 
 # Trivy: versioned tarball, no curl|sh
 RUN set -eux; \

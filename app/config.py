@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     reports_dir: str = "./data/reports"
     uploads_dir: str = "./data/uploads"
     work_dir: str = "./data/work"
+    scan_tmp_dir: str = "/tmp/scans"
+    disk_warn_percent: int = 85
+    scan_tmp_max_age_hours: int = 24
 
     @property
     def is_production(self) -> bool:

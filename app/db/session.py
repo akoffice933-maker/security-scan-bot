@@ -19,8 +19,7 @@ _SessionLocal: sessionmaker | None = None
 def to_sync_url(url: str) -> str:
     return (
         url.replace("sqlite+aiosqlite://", "sqlite://")
-        .replace("postgresql+asyncpg://", "postgresql://")
-        .replace("postgresql+psycopg://", "postgresql://")
+        .replace("postgresql+asyncpg://", "postgresql+psycopg://")
     )
 
 

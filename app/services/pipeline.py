@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from app.config import get_settings
-from app.services import audit, history, scanner
+from app.services import audit, health, history, scanner
 from app.services.findings import ScanResult
 from app.services.export import export_all_formats
 from app.services.llm import summarize_sync
@@ -36,6 +36,15 @@ def execute_scan(payload: dict) -> dict:
             message_id=progress_message_id,
         )
         return {"status": "denied", "reason": reason}
+
+    status = health.log_status()
+    health.cleanup_stale()
+    if not status.ok:
+        reason = "диск переполнен — скан отклонён"
+        history.finish_scan(scan_id, "failed", summary=reason)
+        audit.write_event(user_id, "scan_failed", scan_type, target, scan_id, reason)
+        notify_sync(chat_id, f"⛔ {reason}", message_id=progress_message_id)
+        return {"status": "failed", "reason": reason}
 
     try:
         result = _dispatch(scan_type, target, options, file_path)

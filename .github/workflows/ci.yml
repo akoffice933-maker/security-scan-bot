@@ -27,3 +27,10 @@ jobs:
           ALLOWED_DOCKER_REGISTRIES: "docker.io"
           LLM_ENABLED: "false"
           ENVIRONMENT: "test"
+      - name: Smoke (Bandit on fixture)
+        run: pytest -q tests/test_smoke.py
+        env:
+          BOT_TOKEN: "123456:TEST"
+          ADMIN_IDS: "1"
+          LLM_ENABLED: "false"
+          ENVIRONMENT: "test"

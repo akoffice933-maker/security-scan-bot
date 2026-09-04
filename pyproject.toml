@@ -1,6 +1,6 @@
 [project]
 name = "security-scan-bot"
-version = "0.2.0"
+version = "0.3.0"
 description = "Telegram bot + MCP server for scanning your own projects (Nuclei, Semgrep, Trivy, ClamAV, VirusTotal). Fail-closed allowlists. MIT."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -13,6 +13,7 @@ dependencies = [
     "httpx>=0.27.0",
     "aiosqlite>=0.20.0",
     "sqlalchemy>=2.0.0",
+    "psycopg[binary]>=3.2.0",
     "redis>=5.0.0",
     "orjson>=3.10.0",
     "tenacity>=9.0.0",

@@ -152,7 +152,7 @@ Telegram ──► aiogram (polling или webhook)
                         │
           Nuclei / Semgrep / Trivy / ClamAV / Bandit / VT
                         │
-              SQLite история + отчёты + опционально LLM
+              Postgres (compose) / SQLite (local) + отчёты + audit_log
 
 MCP stdio ────────────────────────────────────┘
 ```
@@ -196,11 +196,13 @@ CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ## Ограничения
 
-- SQLite делят bot и worker через общий volume. Для нагрузки — Postgres.
+- `docker compose` использует Postgres. Локально без Docker по умолчанию SQLite.
 - Нет сканера в PATH — шаг пропускается, скан не падает целиком.
+- Перед сканом проверяется диск и глубина очереди Celery; при >95% диска скан отклоняется.
 - LLM не выдумывает CVE: в промпт уходит уже отфильтрованный JSON, секреты маскируются.
 - PDF нуждается в DejaVu (`app/assets/DejaVuSans.ttf` уже в репозитории).
 - Каждая попытка скана пишется в `audit_log` (кто / что / когда / исход).
+- MCP только stdio — не вешай его на HTTP без токена.
 
 ---
 

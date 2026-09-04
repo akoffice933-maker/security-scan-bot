@@ -12,17 +12,35 @@ services:
       retries: 10
     # Redis is internal-only. Do not publish 6379 to the host.
 
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: scanbot
+      POSTGRES_PASSWORD: scanbot
+      POSTGRES_DB: scanbot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scanbot -d scanbot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # Postgres is internal-only.
+
   bot:
     build: .
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
-      DATABASE_URL: sqlite+aiosqlite:///./data/bot.db
+      DATABASE_URL: postgresql+psycopg://scanbot:scanbot@postgres:5432/scanbot
     volumes:
       - ./data:/app/data
       - scan_tmp:/tmp/scans
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     restart: unless-stopped
     command: python -m app.main
@@ -32,16 +50,19 @@ services:
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
-      DATABASE_URL: sqlite+aiosqlite:///./data/bot.db
+      DATABASE_URL: postgresql+psycopg://scanbot:scanbot@postgres:5432/scanbot
     volumes:
       - ./data:/app/data
       - scan_tmp:/tmp/scans
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     command: celery -A app.celery_app.celery_app worker --loglevel=info --concurrency=2
 
 volumes:
   redis_data:
+  postgres_data:
   scan_tmp:
