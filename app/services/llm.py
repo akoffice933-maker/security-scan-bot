@@ -1,71 +1,94 @@
 from __future__ import annotations
 
+import json
 import logging
-from openai import AsyncOpenAI
+
 from app.config import get_settings
+from app.services.findings import IMPORTANT, ScanResult
+from app.services.textutil import mask_secrets
 
 logger = logging.getLogger(__name__)
 
+SYSTEM = (
+    "Ты помощник по безопасности. Объясняй находки простым русским языком. "
+    "Не выдумывай CVE и не преувеличивай риск. Используй только факты из JSON. "
+    "Секреты и ключи не цитируй — они уже скрыты. "
+    "Структура: 1) кратко что произошло 2) что починить сначала 3) что можно отложить. "
+    "Если находок нет — так и скажи."
+)
 
-class LLMService:
-    def __init__(self) -> None:
-        settings = get_settings()
-        self.enabled = settings.llm_enabled and bool(settings.openrouter_api_key)
-        self.model = settings.llm_model
-        self.client: AsyncOpenAI | None = None
-        if self.enabled:
-            self.client = AsyncOpenAI(
-                api_key=settings.openrouter_api_key,
-                base_url=settings.openrouter_base_url,
-            )
 
-    async def analyze_findings(self, raw_report: str, scan_type: str) -> str:
-        if not self.enabled or not self.client:
-            return raw_report
+def render_summary(result: ScanResult, scan_type: str, target: str) -> str:
+    important = result.important()
+    lines = [
+        f"Проверка: {scan_type} → {target}",
+        f"Всего находок: {len(result.findings)} (важных: {len(important)})",
+    ]
+    if result.error:
+        lines.append(f"Ошибка: {result.error}")
+    if result.notes:
+        lines.append("Заметки: " + "; ".join(result.notes[:5]))
+    if not result.findings:
+        lines.append("Важных проблем не найдено.")
+        return "\n".join(lines)
 
-        system_prompt = (
-            "Ты — дружелюбный помощник по безопасности. "
-            "Объясняй результаты проверки простым языком, как обычному человеку, а не эксперту. "
-            "Избегай сложного жаргона. Если используешь термин — коротко поясни его.\n\n"
-            "Структура ответа:\n"
-            "1. Сначала напиши общий вывод в 1-2 предложениях (всё хорошо / есть проблемы).\n"
-            "2. Если есть важные проблемы — перечисли их простыми словами и скажи, насколько это серьёзно.\n"
-            "3. Дай 2-4 конкретные рекомендации, что можно сделать.\n"
-            "4. В конце коротко напиши: «Подробности лежат в прикреплённых файлах отчёта».\n\n"
-            "Если критичных и высоких проблем нет — так и скажи спокойно и позитивно.\n"
-            "Не выдумывай уязвимости."
+    by_sev: dict[str, int] = {}
+    for item in result.findings:
+        by_sev[item.severity] = by_sev.get(item.severity, 0) + 1
+    lines.append("По серьёзности: " + ", ".join(f"{k}={v}" for k, v in sorted(by_sev.items())))
+    lines.append("Первые важные:")
+    for item in important[:8]:
+        loc = f" ({item.location})" if item.location else ""
+        lines.append(f"- [{item.severity}] {item.scanner}: {item.title}{loc}")
+    if not important:
+        lines.append("Критических/высоких/средних нет — детали в полном отчёте.")
+    return mask_secrets("\n".join(lines))
+
+
+def summarize_sync(result: ScanResult, scan_type: str, target: str) -> str:
+    fallback = render_summary(result, scan_type, target)
+    settings = get_settings()
+    if not settings.llm_enabled or not settings.openrouter_api_key:
+        return fallback
+    brief = {
+        "scan_type": scan_type,
+        "target": target,
+        "notes": result.notes[:10],
+        "error": result.error,
+        "findings": [
+            {
+                "scanner": f.scanner,
+                "severity": f.severity,
+                "title": f.title,
+                "location": f.location,
+                "description": (f.description or "")[:400],
+            }
+            for f in result.findings
+            if f.severity in IMPORTANT
+        ][:40],
+    }
+    payload = mask_secrets(json.dumps(brief, ensure_ascii=False)[:8000])
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+            timeout=60.0,
         )
-
-        type_names = {
-            "url": "сайта",
-            "repo": "исходного кода",
-            "docker": "Docker-образа",
-            "archive": "архива с кодом",
-        }
-        human_type = type_names.get(scan_type, "проекта")
-
-        user_prompt = (
-            f"Результаты проверки {human_type}:\n\n"
-            f"{raw_report[:11000]}"
+        response = client.chat.completions.create(
+            model=settings.llm_model,
+            messages=[
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": payload},
+            ],
         )
-
-        try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.3,
-                max_tokens=1800,
-            )
-            return response.choices[0].message.content or raw_report
-        except Exception as e:
-            logger.exception("LLM analysis failed: %s", e)
-            return (
-                "Не удалось автоматически объяснить результаты.\n\n"
-                "Сырой отчёт:\n" + raw_report[:3000]
-            )
+        text = (response.choices[0].message.content or "").strip()
+        return mask_secrets(text) if text else fallback
+    except Exception:
+        logger.exception("LLM summarization failed")
+        return fallback
 
 
-llm_service = LLMService()
+# imported by app.services.__init__ historically
+llm_service = type("LLMService", (), {"summarize_sync": staticmethod(summarize_sync)})()

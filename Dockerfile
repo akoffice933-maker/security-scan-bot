@@ -1,35 +1,59 @@
 FROM python:3.12-slim
 
+ARG TARGETARCH=amd64
+ARG NUCLEI_VERSION=3.3.7
+ARG TRIVY_VERSION=0.56.2
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    curl \
-    ca-certificates \
-    clamav \
-    clamav-daemon \
+        git \
+        curl \
+        ca-certificates \
+        unzip \
+        clamav \
+        clamav-freshclam \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 RUN freshclam || true
 
-RUN curl -sL https://github.com/projectdiscovery/nuclei/releases/latest/download/nuclei_3.3.7_linux_amd64.zip -o /tmp/nuclei.zip \
-    && apt-get update && apt-get install -y unzip \
-    && unzip /tmp/nuclei.zip -d /usr/local/bin/ \
-    && rm /tmp/nuclei.zip \
-    && nuclei -update-templates || true
+# Nuclei: versioned GitHub release (not /latest/download with a pinned filename)
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) NARCH=amd64 ;; \
+      arm64) NARCH=arm64 ;; \
+      *) NARCH=amd64 ;; \
+    esac; \
+    curl -fsSL "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${NARCH}.zip" -o /tmp/nuclei.zip; \
+    unzip /tmp/nuclei.zip -d /usr/local/bin/; \
+    chmod +x /usr/local/bin/nuclei; \
+    rm /tmp/nuclei.zip; \
+    nuclei -update-templates || true
 
-RUN pip install --no-cache-dir semgrep bandit
-
-RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+# Trivy: versioned tarball, no curl|sh
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) TARCH=64bit ;; \
+      arm64) TARCH=ARM64 ;; \
+      *) TARCH=64bit ;; \
+    esac; \
+    curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${TARCH}.tar.gz" -o /tmp/trivy.tgz; \
+    tar -xzf /tmp/trivy.tgz -C /usr/local/bin trivy; \
+    chmod +x /usr/local/bin/trivy; \
+    rm /tmp/trivy.tgz
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir semgrep
 
 COPY . .
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data /tmp/scans
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+
+EXPOSE 8080
 
 CMD ["python", "-m", "app.main"]

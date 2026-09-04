@@ -1,84 +1,120 @@
-from aiogram import Router, F
-from aiogram.filters import Command, CommandStart
-from aiogram.types import Message, CallbackQuery
-from aiogram.fsm.context import FSMContext
+from __future__ import annotations
 
-from app.config import get_settings
-from app.keyboards.menu import main_menu_kb
+import asyncio
+
+from aiogram import F, Router
+from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
+
+from app.keyboards.menu import (
+    BTN_HELP,
+    BTN_HISTORY,
+    after_scan_kb,
+    history_kb,
+    main_menu_kb,
+)
+from app.services import history
+from app.services.textutil import escape_html, truncate
 
 router = Router(name="common")
 
+WELCOME = (
+    "Привет. Я проверяю <b>только твои</b> проекты.\n\n"
+    "Сканировать чужие сайты, репозитории и образы — нельзя и, скорее всего, незаконно.\n"
+    "Работают только домены, GitHub-организации и Docker-registry из whitelist.\n\n"
+    "Выбери, что проверить."
+)
 
-WELCOME_TEXT = """
-🛡 <b>Привет! Я бот для проверки безопасности твоих проектов.</b>
-
-Я умею находить:
-• уязвимости на сайтах
-• проблемы и слабые места в коде
-• <b>вирусы и вредоносное ПО</b> (ClamAV + VirusTotal)
-• случайно оставленные пароли и ключи
-• ошибки в Docker и конфигурациях
-
-<b>Как это работает:</b>
-1. Выбираешь, что проверить
-2. Отправляешь ссылку или файл
-3. Я всё проверяю и объясняю простым языком
-4. Присылаю понятный отчёт
-
-Нажимай кнопки ниже — я подскажу каждый шаг.
-""".strip()
-
-
-HELP_TEXT = """
-❓ <b>Как пользоваться ботом</b>
-
-🔍 <b>Проверить сайт</b>
-Проверка на известные уязвимости и ошибки настройки.
-
-📁 <b>Проверить код (GitHub)</b> и 📦 <b>Архив</b>
-• вирусы (ClamAV + VirusTotal)
-• уязвимости в коде
-• секреты (пароли, токены)
-• ошибки конфигурации
-
-🐳 <b>Проверить Docker-образ</b>
-Поиск известных уязвимостей в образе.
-
-После проверки ты получишь:
-• простое объяснение результатов
-• только важные находки
-• подробные отчёты (PDF, HTML и др.)
-
-Проверяй только <b>свои</b> проекты.
-""".strip()
+HELP = (
+    "<b>Как пользоваться</b>\n"
+    "• Сайт — Nuclei по URL из whitelist доменов\n"
+    "• GitHub — clone + Semgrep + Trivy + Bandit + ClamAV\n"
+    "• Архив — распаковка с защитой от zip-slip, те же сканеры\n"
+    "• Docker — Trivy image по registry из whitelist\n\n"
+    "В чат попадают важные находки. Полный отчёт — PDF / HTML / Markdown / JSON.\n"
+    "/cancel — отменить текущий шаг."
+)
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer(WELCOME_TEXT, reply_markup=main_menu_kb())
+    await message.answer(WELCOME, reply_markup=main_menu_kb())
 
 
-@router.message(F.text.in_({"❓ Помощь", "помощь", "Помощь", "/help"}))
 @router.message(Command("help"))
-async def cmd_help(message: Message, state: FSMContext) -> None:
+@router.message(F.text == BTN_HELP)
+async def cmd_help(message: Message) -> None:
+    await message.answer(HELP, reply_markup=main_menu_kb())
+
+
+@router.message(Command("cancel"))
+async def cmd_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer(HELP_TEXT, reply_markup=main_menu_kb())
+    await message.answer("Отменил. Можно начать заново.", reply_markup=main_menu_kb())
 
 
-@router.message(Command("status"))
-async def cmd_status(message: Message) -> None:
-    settings = get_settings()
-    text = (
-        "🤖 Бот работает.\n\n"
-        f"Умный анализ: {'включён' if settings.llm_enabled else 'выключен'}\n"
-        "Можешь начинать проверку кнопками ниже."
-    )
-    await message.answer(text, reply_markup=main_menu_kb())
+@router.callback_query(F.data == "cancel_scan")
+async def cb_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.answer("Отменено")
+    if callback.message:
+        await callback.message.answer("Отменил. Можно начать заново.", reply_markup=main_menu_kb())
 
 
 @router.callback_query(F.data == "back_to_menu")
-async def back_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
+async def cb_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.answer("Выбери, что хочешь проверить:", reply_markup=main_menu_kb())
     await callback.answer()
+    if callback.message:
+        await callback.message.answer("Меню:", reply_markup=main_menu_kb())
+
+
+@router.message(F.text == BTN_HISTORY)
+@router.callback_query(F.data == "show_history")
+async def show_history(event: Message | CallbackQuery) -> None:
+    user = event.from_user
+    if not user:
+        return
+    rows = await asyncio.to_thread(history.get_user_history, user.id, 10)
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+        message = event.message
+    else:
+        message = event
+    if not message:
+        return
+    if not rows:
+        await message.answer("История пустая.", reply_markup=after_scan_kb())
+        return
+    items = []
+    text_lines = ["<b>Последние проверки</b>"]
+    for row in rows:
+        label = f"#{row.id} {row.status} {row.scan_type} {truncate(row.target, 40)}"
+        items.append((row.id, label))
+        text_lines.append(escape_html(label))
+    await message.answer("\n".join(text_lines), reply_markup=history_kb(items))
+
+
+@router.callback_query(F.data.startswith("history:"))
+async def cb_history_item(callback: CallbackQuery) -> None:
+    await callback.answer()
+    try:
+        scan_id = int((callback.data or "").split(":", 1)[1])
+    except (ValueError, IndexError):
+        return
+    row = await asyncio.to_thread(history.get_scan, scan_id)
+    if not row or not callback.from_user or row.user_id != callback.from_user.id:
+        if callback.message:
+            await callback.message.answer("Запись не найдена.")
+        return
+    body = (
+        f"<b>Проверка #{row.id}</b>\n"
+        f"Тип: {escape_html(row.scan_type)}\n"
+        f"Цель: <code>{escape_html(row.target)}</code>\n"
+        f"Статус: {escape_html(row.status)}\n\n"
+        f"{escape_html(row.summary or 'нет описания')}"
+    )
+    if callback.message:
+        await callback.message.answer(body, reply_markup=after_scan_kb())

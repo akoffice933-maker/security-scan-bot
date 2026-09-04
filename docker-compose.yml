@@ -2,22 +2,28 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # Redis is internal-only. Do not publish 6379 to the host.
 
   bot:
     build: .
     env_file: .env
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=sqlite+aiosqlite:///./data/bot.db
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: sqlite+aiosqlite:///./data/bot.db
     volumes:
       - ./data:/app/data
-      - ./:/app
+      - scan_tmp:/tmp/scans
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     command: python -m app.main
 
@@ -25,15 +31,17 @@ services:
     build: .
     env_file: .env
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=sqlite+aiosqlite:///./data/bot.db
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: sqlite+aiosqlite:///./data/bot.db
     volumes:
       - ./data:/app/data
-      - ./:/app
+      - scan_tmp:/tmp/scans
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     command: celery -A app.celery_app.celery_app worker --loglevel=info --concurrency=2
 
 volumes:
   redis_data:
+  scan_tmp:

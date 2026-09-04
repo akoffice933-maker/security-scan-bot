@@ -21,4 +21,5 @@ celery_app.conf.update(
     task_time_limit=settings.scan_timeout_seconds + 60,
     worker_prefetch_multiplier=1,
     task_acks_late=True,
+    broker_connection_retry_on_startup=True,
 )

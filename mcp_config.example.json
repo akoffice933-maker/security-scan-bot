@@ -5,13 +5,15 @@
       "args": ["-m", "app.mcp_server"],
       "cwd": "/absolute/path/to/security-scan-bot",
       "env": {
-        "BOT_TOKEN": "dummy-not-needed-for-mcp",
-        "OPENROUTER_API_KEY": "your-key-if-you-want-llm-explanations",
-        "VIRUSTOTAL_API_KEY": "optional",
-        "ALLOWED_DOMAINS": "example.com,localhost",
+        "BOT_TOKEN": "",
+        "OPENROUTER_API_KEY": "",
+        "VIRUSTOTAL_API_KEY": "",
+        "ALLOWED_DOMAINS": "example.com,localhost,127.0.0.1",
         "ALLOWED_GITHUB_ORGS": "your-github-username",
-        "LLM_ENABLED": "true",
-        "DATABASE_URL": "sqlite+aiosqlite:///./data/bot.db"
+        "ALLOWED_DOCKER_REGISTRIES": "docker.io,ghcr.io,localhost",
+        "LLM_ENABLED": "false",
+        "DATABASE_URL": "sqlite+aiosqlite:///./data/bot.db",
+        "ENVIRONMENT": "development"
       }
     }
   }

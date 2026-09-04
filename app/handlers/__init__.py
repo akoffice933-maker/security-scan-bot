@@ -1,3 +1,11 @@
-from . import common, scan
+from aiogram import Dispatcher
 
-__all__ = ["common", "scan"]
+from app.handlers import common, scan
+
+
+def setup_routers(dp: Dispatcher) -> None:
+    dp.include_router(common.router)
+    dp.include_router(scan.router)
+
+
+__all__ = ["common", "scan", "setup_routers"]
