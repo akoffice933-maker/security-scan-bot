@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         unzip \
     && if [ "${WITH_CLAMAV}" = "1" ]; then \
          apt-get install -y --no-install-recommends clamav clamav-freshclam \
-         && (freshclam || true); \
+         && (freshclam || true) \
+         && chmod -R a+rX /var/lib/clamav; \
        fi \
     && rm -rf /var/lib/apt/lists/*
 

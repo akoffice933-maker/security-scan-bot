@@ -29,7 +29,10 @@ services:
     # Postgres is internal-only.
 
   bot:
-    build: .
+    build:
+      context: .
+      args:
+        WITH_CLAMAV: "1"
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
@@ -45,7 +48,10 @@ services:
     command: python -m app.main
 
   worker:
-    build: .
+    build:
+      context: .
+      args:
+        WITH_CLAMAV: "1"
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0

@@ -69,9 +69,9 @@ mkdir -p data && sudo chown -R 1000:1000 data
 docker compose up --build -d
 ```
 
-Compose поднимает Postgres + Redis (не публикуются наружу). Контейнер идёт не от root (`USER appuser`). В Telegram открой своего бота и отправь `/start`.
+Compose поднимает Postgres + Redis (не публикуются наружу). Контейнер идёт не от root (`USER appuser`). Образ собирается **с ClamAV** (сигнатуры качаются на `docker compose build`). Без антивируса: `docker compose build --build-arg WITH_CLAMAV=0`.
 
-ClamAV в образ по умолчанию не кладётся. Нужен антивирус: `docker compose build --build-arg WITH_CLAMAV=1`.
+В Telegram открой своего бота и отправь `/start`.
 
 ---
 
