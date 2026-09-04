@@ -101,9 +101,10 @@ celery -A app.celery_app.celery_app worker --loglevel=info
 
 ```bash
 python scripts/scan_repo.py your-github-username/your-repo
+python scripts/scan_url.py https://your-domain.example/ --profile all
 ```
 
-Отчёты пишутся в `data/reports/scan-<id>/`.
+Отчёты пишутся в `data/reports/scan-<id>/`. URL-скан смотрит заголовки (EOL PHP, HSTS, утечка версии) и затем Nuclei.
 
 ---
 
