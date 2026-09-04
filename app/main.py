@@ -82,7 +82,8 @@ def main() -> None:
         )
         handler.register(app, path=settings.webhook_path)
         setup_application(app, dp, bot=bot)
-        web.run_app(app, host="0.0.0.0", port=int(settings.port))
+        # Bind all interfaces inside the container so the platform proxy can reach webhook.
+        web.run_app(app, host="0.0.0.0", port=int(settings.port))  # nosec B104
     else:
         logger.info("Starting in POLLING mode...")
         logger.info("LLM enabled: %s | model: %s", settings.llm_enabled, settings.llm_model)

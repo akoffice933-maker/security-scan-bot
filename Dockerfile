@@ -48,10 +48,15 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 COPY . .
 
-RUN mkdir -p /app/data /tmp/scans
+RUN useradd --create-home --uid 1000 --shell /usr/sbin/nologin appuser \
+    && mkdir -p /app/data /tmp/scans \
+    && chown -R appuser:appuser /app /tmp/scans
+
+USER appuser
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+ENV HOME=/home/appuser
 
 EXPOSE 8080
 

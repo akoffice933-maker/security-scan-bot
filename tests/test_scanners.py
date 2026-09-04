@@ -116,6 +116,22 @@ def test_trivy_parses_cve_and_secret(monkeypatch):
     assert all("значение скрыто" in f.description or f.title.startswith("CVE") for f in result.findings)
 
 
+def test_bandit_excludes_tests_dir(monkeypatch, tmp_path):
+    monkeypatch.setattr(scanners, "tool_available", _always_available)
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "app.py").write_text("x = 1\n")
+    captured: dict = {}
+
+    def fake_run(argv, timeout, cwd=None, extra_env=None):
+        captured["argv"] = argv
+        return SandboxResult(0, "{}", "")
+
+    monkeypatch.setattr(scanners, "run_cmd", fake_run)
+    scanners.scan_bandit(str(tmp_path), timeout=10)
+    assert "-x" in captured["argv"]
+    assert str(tmp_path / "tests") in captured["argv"]
+
+
 def test_clamav_found_is_critical(monkeypatch):
     monkeypatch.setattr(scanners, "tool_available", _always_available)
     monkeypatch.setattr(

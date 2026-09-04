@@ -150,6 +150,9 @@ def scan_bandit(target: str, timeout: int) -> ScanResult:
     if not py_files:
         return ScanResult(success=True, notes=["Python-файлов нет, Bandit пропущен"])
     argv = [s.bandit_path, "-r", target, "-f", "json", "-q"]
+    tests_dir = Path(target) / "tests"
+    if tests_dir.is_dir():
+        argv.extend(["-x", str(tests_dir)])
     proc = run_cmd(argv, timeout=timeout)
     result = ScanResult(success=True)
     try:

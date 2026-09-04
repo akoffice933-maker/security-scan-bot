@@ -24,7 +24,7 @@ English one-liner: *Personal Nuclei / Semgrep / Trivy / ClamAV scanner with a fa
 Дополнительно:
 
 - краткое объяснение находок (OpenRouter / любой OpenAI-compatible LLM, опционально);
-- отчёты **PDF, HTML, Markdown, JSON**;
+- отчёты **PDF, HTML, Markdown, JSON** — у каждой находки блок **«Чем опасно»**;
 - в чат попадают только важные находки (critical / high / medium);
 - очередь **Celery + Redis**;
 - **MCP-сервер** (stdio) для других ИИ-агентов;
@@ -65,10 +65,13 @@ ALLOWED_DOCKER_REGISTRIES=docker.io,ghcr.io
 ```
 
 ```bash
+mkdir -p data && sudo chown -R 1000:1000 data
 docker compose up --build -d
 ```
 
-Redis наружу не публикуется. В Telegram открой своего бота и отправь `/start`.
+Compose поднимает Postgres + Redis (не публикуются наружу). Контейнер идёт не от root (`USER appuser`). В Telegram открой своего бота и отправь `/start`.
+
+ClamAV в образ по умолчанию не кладётся. Нужен антивирус: `docker compose build --build-arg WITH_CLAMAV=1`.
 
 ---
 

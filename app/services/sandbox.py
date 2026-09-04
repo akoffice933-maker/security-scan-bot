@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+from pathlib import Path
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -32,9 +33,10 @@ def run_cmd(
     if timeout <= 0:
         raise ValueError("timeout must be positive")
 
+    home = os.environ.get("HOME") or str(Path.cwd() / "data" / "home")
     env = {
         "PATH": os.environ.get("PATH", SAFE_PATH),
-        "HOME": os.environ.get("HOME", "/tmp"),
+        "HOME": home,
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
         "TERM": "dumb",
