@@ -14,9 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 from app.config import clear_settings_cache, get_settings  # noqa: E402
 from app.db.session import init_db_sync  # noqa: E402
-from app.services import history  # noqa: E402
-from app.services.export import export_all_formats  # noqa: E402
-from app.services.llm import summarize_sync  # noqa: E402
+from app.services import audit, history  # noqa: E402
 from app.services.pipeline import execute_scan  # noqa: E402
 from app.services.policy import allow_repo  # noqa: E402
 from app.services.scanners import capabilities  # noqa: E402
