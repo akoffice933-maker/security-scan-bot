@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import socket
 from urllib.parse import urlparse
 
 from app.config import get_settings
@@ -30,6 +31,61 @@ def _is_ip(value: str) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _canonical_ip(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
+    ip = ipaddress.ip_address(value)
+    mapped = getattr(ip, "ipv4_mapped", None)
+    return mapped if mapped is not None else ip
+
+
+def ip_is_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Deny loopback, private, link-local, CGNAT, metadata — anything not global."""
+    if str(ip) in METADATA_HOSTS:
+        return True
+    return not ip.is_global
+
+
+def resolve_host_ips(host: str) -> list[str]:
+    infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    seen: list[str] = []
+    for info in infos:
+        addr = info[4][0]
+        text = str(_canonical_ip(addr))
+        if text not in seen:
+            seen.append(text)
+    return seen
+
+
+def assert_host_public(host: str) -> tuple[bool, str]:
+    """Resolve (if needed) and reject non-public addresses. Closes DNS-rebinding TOCTOU."""
+    host = (host or "").lower().rstrip(".")
+    if not host:
+        return False, "в URL нет хоста"
+    if _is_ip(host):
+        ip = _canonical_ip(host)
+        if ip_is_blocked(ip):
+            return False, f"IP {ip} заблокирован (не публичный)"
+        return True, ""
+    try:
+        ips = resolve_host_ips(host)
+    except OSError:
+        return False, f"не удалось разрешить DNS для {host}"
+    if not ips:
+        return False, f"нет адресов для {host}"
+    for text in ips:
+        ip = _canonical_ip(text)
+        if ip_is_blocked(ip):
+            return False, f"хост {host} резолвится во внутренний IP {ip}"
+    return True, ""
+
+
+def assert_url_safe_to_connect(url: str) -> tuple[bool, str]:
+    ok, reason = allow_url(url)
+    if not ok:
+        return ok, reason
+    host = (urlparse(url).hostname or "").lower().rstrip(".")
+    return assert_host_public(host)
 
 
 def _host_matches(host: str, allowed: str) -> bool:
@@ -75,9 +131,9 @@ def allow_url(
     if host in METADATA_HOSTS or host.endswith(".internal"):
         return False, "этот хост заблокирован (cloud metadata)"
     if _is_ip(host):
-        ip = ipaddress.ip_address(host)
-        if ip.is_link_local or str(ip) in METADATA_HOSTS:
-            return False, "этот IP заблокирован"
+        ip = _canonical_ip(host)
+        if ip_is_blocked(ip):
+            return False, f"IP {ip} заблокирован (не публичный)"
     if not host_in_allowlist(host, domains):
         return False, f"хост {host} не в whitelist доменов"
     return True, ""

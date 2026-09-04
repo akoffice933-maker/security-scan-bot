@@ -11,7 +11,7 @@ from email.message import Message
 from urllib.parse import urlparse
 
 from app.services.findings import Finding, ScanResult
-from app.services.policy import allow_url
+from app.services.policy import assert_url_safe_to_connect
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ PHP_SECURITY_ONLY = {(8, 2)}
 
 class _AllowlistRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
-        ok, _ = allow_url(newurl)
+        ok, _ = assert_url_safe_to_connect(newurl)
         if not ok:
             logger.info("httpcheck: stop redirect to non-allowlisted %s", newurl)
             return None
@@ -140,7 +140,7 @@ def fetch_headers(url: str, timeout: int = 15) -> tuple[Message, str]:
 
 
 def scan_http(url: str, timeout: int = 15) -> ScanResult:
-    ok, reason = allow_url(url)
+    ok, reason = assert_url_safe_to_connect(url)
     if not ok:
         return ScanResult(success=False, error=reason)
     result = ScanResult(success=True)

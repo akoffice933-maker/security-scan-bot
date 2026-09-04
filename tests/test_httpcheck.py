@@ -45,6 +45,9 @@ def test_scan_http_denied():
 def test_scan_url_merges_headers(monkeypatch):
     from app.services import httpcheck, scanners
     from app.services.findings import Finding, ScanResult
+    from app.services import scanner as scan_mod
+
+    monkeypatch.setattr(scan_mod, "assert_url_safe_to_connect", lambda url: (True, ""))
 
     monkeypatch.setattr(
         httpcheck,

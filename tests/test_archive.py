@@ -32,6 +32,17 @@ def test_zip_slip_rejected(tmp_path: Path):
     assert not (tmp_path / "pwned.txt").exists()
 
 
+def test_zip_bomb_stops(tmp_path: Path, monkeypatch):
+    from app.services import archive as archive_mod
+
+    monkeypatch.setattr(archive_mod, "MAX_UNCOMPRESSED_BYTES", 50)
+    archive = tmp_path / "bomb.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("big.txt", "A" * 200)
+    with pytest.raises(ValueError, match="бомба|распаков"):
+        extract_archive(archive, tmp_path / "out")
+
+
 def test_absolute_path_in_zip_rejected(tmp_path: Path):
     archive = tmp_path / "abs.zip"
     buf = io.BytesIO()

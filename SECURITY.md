@@ -12,9 +12,13 @@ to test may be illegal.
 - Empty allowlists (`ALLOWED_DOMAINS`, `ALLOWED_GITHUB_ORGS`,
   `ALLOWED_DOCKER_REGISTRIES`) → that scan type is denied.
 - Cloud metadata hosts (`169.254.169.254`, `metadata.google.internal`) are
-  always blocked.
+  always blocked. Loopback and private IPs are blocked even if they appear
+  in `ALLOWED_DOMAINS`. Before an HTTP/Nuclei scan the hostname is resolved
+  and every address must be global (mitigates DNS rebinding).
 - Scanner binaries run via `subprocess` with `shell=False`.
-- Archives are extracted with zip-slip and size checks.
+- Archives are extracted with zip-slip checks and a 200 MB uncompressed cap
+  (zip-bomb).
+- MCP server is stdio-only (`MCP_TRANSPORT` other than stdio is refused).
 - Secrets in reports and LLM prompts are masked.
 - Every scan attempt is written to `audit_log` (who / what / when / outcome).
 

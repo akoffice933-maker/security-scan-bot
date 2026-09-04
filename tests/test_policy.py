@@ -2,6 +2,8 @@ from app.services.policy import (
     allow_image,
     allow_repo,
     allow_url,
+    assert_host_public,
+    assert_url_safe_to_connect,
     extract_docker_registry,
     parse_github_repo,
 )
@@ -20,8 +22,16 @@ def test_empty_domain_whitelist_denies():
 def test_url_allows_exact_and_subdomain():
     assert allow_url("https://example.com/app", DOMAINS)[0] is True
     assert allow_url("https://api.example.com", DOMAINS)[0] is True
-    assert allow_url("http://127.0.0.1:8080/", DOMAINS)[0] is True
+    # hostname still matches allowlist; connect-time DNS check blocks loopback
     assert allow_url("http://localhost/health", DOMAINS)[0] is True
+
+
+def test_url_rejects_private_and_loopback_ip_literals():
+    assert allow_url("http://127.0.0.1:8080/", DOMAINS)[0] is False
+    assert allow_url("http://10.0.0.5/", ["10.0.0.5"])[0] is False
+    assert allow_url("http://192.168.1.1/", ["192.168.1.1"])[0] is False
+    assert allow_url("http://172.16.0.1/", ["172.16.0.1"])[0] is False
+    assert allow_url("http://169.254.1.1/", ["169.254.1.1"])[0] is False
 
 
 def test_url_rejects_suffix_tricks_and_schemes():
@@ -68,6 +78,37 @@ def test_docker_registry_extraction():
     assert extract_docker_registry("library/nginx") == "docker.io"
     assert extract_docker_registry("ghcr.io/myorg/app:latest") == "ghcr.io"
     assert extract_docker_registry("localhost:5000/foo:tag") == "localhost:5000"
+
+
+def test_dns_rebinding_blocked(monkeypatch):
+    import socket
+
+    from app.services import policy as policy_mod
+
+    def fake_addrinfo(host, port, *a, **k):
+        if host in {"evil.example.com", "localhost"}:
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))]
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+
+    monkeypatch.setattr(policy_mod.socket, "getaddrinfo", fake_addrinfo)
+    ok, reason = assert_host_public("evil.example.com")
+    assert ok is False
+    assert "127.0.0.1" in reason
+    assert assert_host_public("example.com")[0] is True
+    assert assert_host_public("localhost")[0] is False
+
+
+def test_assert_url_safe_requires_allowlist_and_public_ip(monkeypatch):
+    from app.services import policy as policy_mod
+
+    monkeypatch.setattr(
+        policy_mod.socket,
+        "getaddrinfo",
+        lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))],
+    )
+    ok, _ = assert_url_safe_to_connect("https://example.com/", )
+    # uses settings allowlist from conftest which includes example.com
+    assert ok is True
 
 
 def test_docker_allowlist():

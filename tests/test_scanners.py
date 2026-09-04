@@ -142,3 +142,14 @@ def test_clamav_found_is_critical(monkeypatch):
     result = scanners.scan_clamav("/tmp/eicar", timeout=10)
     assert result.findings[0].severity == "critical"
     assert "Eicar" in result.findings[0].description
+
+
+def test_clamav_ignores_found_in_path(monkeypatch):
+    monkeypatch.setattr(scanners, "tool_available", _always_available)
+    monkeypatch.setattr(
+        scanners,
+        "run_cmd",
+        lambda *a, **k: SandboxResult(0, "/tmp/FOUND-notes.txt: OK\n", ""),
+    )
+    result = scanners.scan_clamav("/tmp", timeout=10)
+    assert result.findings == []

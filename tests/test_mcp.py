@@ -1,4 +1,6 @@
-from app.mcp_server.server import create_mcp
+import pytest
+
+from app.mcp_server.server import create_mcp, refuse_non_stdio
 
 
 def test_create_mcp_registers_tools():
@@ -17,3 +19,13 @@ def test_create_mcp_registers_tools():
     if names:
         assert "scan_url" in names
         assert "get_scan_capabilities" in names
+
+
+def test_mcp_refuses_http_transport(monkeypatch):
+    monkeypatch.setenv("MCP_TRANSPORT", "sse")
+    with pytest.raises(SystemExit, match="stdio"):
+        refuse_non_stdio()
+    monkeypatch.delenv("MCP_TRANSPORT")
+    monkeypatch.setenv("FASTMCP_HOST", "0.0.0.0")
+    with pytest.raises(SystemExit, match="stdio"):
+        refuse_non_stdio()

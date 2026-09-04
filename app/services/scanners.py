@@ -268,16 +268,20 @@ def scan_clamav(target: str, timeout: int) -> ScanResult:
     if proc.timed_out:
         result.notes.append("ClamAV превысил таймаут")
     for line in (proc.stdout or "").splitlines():
-        if " FOUND" in line:
-            path, _, sig = line.partition(":")
-            result.findings.append(
-                Finding(
-                    scanner="clamav",
-                    severity="critical",
-                    title="malware",
-                    description=sig.replace("FOUND", "").strip() or "infected",
-                    location=path.strip(),
-                )
+        if not line.endswith(" FOUND"):
+            continue
+        path, sep, rest = line.rpartition(": ")
+        if not sep:
+            continue
+        sig = rest[: -len(" FOUND")].strip()
+        result.findings.append(
+            Finding(
+                scanner="clamav",
+                severity="critical",
+                title="malware",
+                description=sig or "infected",
+                location=path.strip(),
             )
+        )
     result.stats["clamav"] = len(result.findings)
     return result

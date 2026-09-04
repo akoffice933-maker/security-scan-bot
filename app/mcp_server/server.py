@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 from app.db.session import init_db_sync
 from app.services import scanner as scan_svc
@@ -89,8 +90,19 @@ def create_mcp():
     return mcp
 
 
+def refuse_non_stdio() -> None:
+    """MCP is stdio-only. Refuse if someone wraps it in HTTP/SSE."""
+    transport = (os.environ.get("MCP_TRANSPORT") or "stdio").strip().lower()
+    if transport not in {"stdio", ""}:
+        raise SystemExit("MCP только stdio. HTTP/SSE транспорт запрещён.")
+    for key in ("FASTMCP_HOST", "MCP_HTTP", "MCP_SSE"):
+        if os.environ.get(key):
+            raise SystemExit(f"MCP только stdio ({key} задан — отказ).")
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
+    refuse_non_stdio()
     init_db_sync()
     mcp = create_mcp()
     mcp.run(transport="stdio")
