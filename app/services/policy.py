@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 import re
 import socket
 from urllib.parse import urlparse
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 METADATA_HOSTS = {
     "169.254.169.254",
@@ -65,7 +68,7 @@ def assert_host_public(host: str) -> tuple[bool, str]:
     if _is_ip(host):
         ip = _canonical_ip(host)
         if ip_is_blocked(ip):
-            return False, f"IP {ip} заблокирован (не публичный)"
+            return False, "этот IP заблокирован (не публичный)"
         return True, ""
     try:
         ips = resolve_host_ips(host)
@@ -76,7 +79,8 @@ def assert_host_public(host: str) -> tuple[bool, str]:
     for text in ips:
         ip = _canonical_ip(text)
         if ip_is_blocked(ip):
-            return False, f"хост {host} резолвится во внутренний IP {ip}"
+            logger.info("blocked internal resolution host=%s ip=%s", host, ip)
+            return False, f"хост {host} указывает на внутреннюю сеть — скан отклонён"
     return True, ""
 
 
@@ -133,7 +137,7 @@ def allow_url(
     if _is_ip(host):
         ip = _canonical_ip(host)
         if ip_is_blocked(ip):
-            return False, f"IP {ip} заблокирован (не публичный)"
+            return False, "этот IP заблокирован (не публичный)"
     if not host_in_allowlist(host, domains):
         return False, f"хост {host} не в whitelist доменов"
     return True, ""

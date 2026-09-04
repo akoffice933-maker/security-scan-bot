@@ -93,7 +93,8 @@ def test_dns_rebinding_blocked(monkeypatch):
     monkeypatch.setattr(policy_mod.socket, "getaddrinfo", fake_addrinfo)
     ok, reason = assert_host_public("evil.example.com")
     assert ok is False
-    assert "127.0.0.1" in reason
+    assert "внутренн" in reason
+    assert "127.0.0.1" not in reason
     assert assert_host_public("example.com")[0] is True
     assert assert_host_public("localhost")[0] is False
 
