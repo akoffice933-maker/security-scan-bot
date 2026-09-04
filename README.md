@@ -11,6 +11,16 @@ English one-liner: *Personal Nuclei / Semgrep / Trivy / ClamAV scanner with a fa
 
 ---
 
+## Демо
+
+Короткий ролик (~2 мин): что умеет сканер и как его запустить (Docker, `.env`, Telegram, CLI).
+
+[▶ Смотреть демо (MP4, ~5 МБ)](docs/demo.mp4)
+
+[![Кадр из демо](docs/demo/01-title.png)](docs/demo.mp4)
+
+---
+
 ## Что умеет
 
 | Цель | Инструменты | Ограничение |
