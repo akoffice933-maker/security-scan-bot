@@ -21,7 +21,7 @@ from app.keyboards.menu import (
 )
 from app.services import audit, history
 from app.services.archive import is_allowed_archive
-from app.services.policy import allow_image, allow_repo, allow_url
+from app.services.policy import allow_image, allow_repo, allow_url, normalize_http_target
 from app.services.queue import enqueue_scan
 from app.services.textutil import escape_html
 
@@ -77,7 +77,7 @@ async def _start_scan(
 async def start_site(message: Message, state: FSMContext) -> None:
     await state.set_state(ScanStates.waiting_url)
     await message.answer(
-        "Пришли URL (только http/https и домен из whitelist).\n"
+        "Пришли URL (http/https) или свой публичный IP из ALLOWED_IPS.\n"
         "Чужие сайты сканировать нельзя.",
         reply_markup=cancel_kb(),
     )
@@ -85,7 +85,7 @@ async def start_site(message: Message, state: FSMContext) -> None:
 
 @router.message(ScanStates.waiting_url, F.text)
 async def got_url(message: Message, state: FSMContext) -> None:
-    url = (message.text or "").strip()
+    url = normalize_http_target((message.text or "").strip())
     ok, reason = allow_url(url)
     if not ok:
         if message.from_user:

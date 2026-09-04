@@ -6,7 +6,7 @@ import os
 
 from app.db.session import init_db_sync
 from app.services import scanner as scan_svc
-from app.services.policy import allow_image, allow_repo, allow_url
+from app.services.policy import allow_image, allow_repo, allow_url, normalize_http_target
 from app.services.scanners import capabilities
 from app.services.textutil import mask_secrets
 
@@ -34,14 +34,15 @@ def create_mcp():
         "security-scan-bot",
         instructions=(
             "Scan only allowlisted targets you own. "
-            "Refuse anything outside ALLOWED_DOMAINS / ALLOWED_GITHUB_ORGS / "
-            "ALLOWED_DOCKER_REGISTRIES. Never scan third-party systems."
+            "Refuse anything outside ALLOWED_DOMAINS / ALLOWED_IPS / "
+            "ALLOWED_GITHUB_ORGS / ALLOWED_DOCKER_REGISTRIES. Never scan third-party systems."
         ),
     )
 
     @mcp.tool()
     def scan_url(url: str, profile: str = "cve") -> str:
         """Scan an allowlisted URL with Nuclei. profile: cve|misconfig|exposures|all."""
+        url = normalize_http_target(url)
         ok, reason = allow_url(url)
         if not ok:
             return json.dumps({"success": False, "error": reason})
@@ -82,6 +83,7 @@ def create_mcp():
         settings = get_settings()
         caps["whitelist"] = {
             "domains": len(settings.allowed_domains),
+            "ips": len(settings.allowed_ips),
             "github_orgs": len(settings.allowed_github_orgs),
             "docker_registries": len(settings.allowed_docker_registries),
         }

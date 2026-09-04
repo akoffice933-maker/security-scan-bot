@@ -25,7 +25,7 @@ English one-liner: *Personal Nuclei / Semgrep / Trivy / ClamAV scanner with a fa
 
 | Цель | Инструменты | Ограничение |
 |------|-------------|-------------|
-| Сайт (URL) | Nuclei + заголовки HTTP | только `ALLOWED_DOMAINS` |
+| Сайт (URL / IP) | Nuclei + заголовки HTTP | домен из `ALLOWED_DOMAINS` или точный IP из `ALLOWED_DOMAINS`/`ALLOWED_IPS` |
 | GitHub-репозиторий | Semgrep, Bandit, Trivy fs, ClamAV | только `ALLOWED_GITHUB_ORGS` |
 | Архив zip/tar | то же + защита от zip-slip | лимит размера |
 | Docker-образ | Trivy image | только `ALLOWED_DOCKER_REGISTRIES` |
@@ -70,6 +70,7 @@ cp .env.example .env
 BOT_TOKEN=...                 # от @BotFather
 ADMIN_IDS=123456789           # твой numeric id (@userinfobot)
 ALLOWED_DOMAINS=example.com,localhost
+ALLOWED_IPS=
 ALLOWED_GITHUB_ORGS=your-github-username
 ALLOWED_DOCKER_REGISTRIES=docker.io,ghcr.io
 ```
@@ -112,6 +113,8 @@ celery -A app.celery_app.celery_app worker --loglevel=info
 ```bash
 python scripts/scan_repo.py your-github-username/your-repo
 python scripts/scan_url.py https://your-domain.example/ --profile all
+# IP из ALLOWED_IPS или ALLOWED_DOMAINS:
+# python scripts/scan_url.py 8.8.8.8 --profile all
 ```
 
 Отчёты пишутся в `data/reports/scan-<id>/`. URL-скан смотрит заголовки (EOL PHP, HSTS, утечка версии) и затем Nuclei.
@@ -121,7 +124,7 @@ python scripts/scan_url.py https://your-domain.example/ --profile all
 ## Как пользоваться ботом
 
 1. `/start` — меню.
-2. **Проверить сайт** — URL из whitelist, затем профиль Nuclei (CVE / misconfig / exposures / all).
+2. **Проверить сайт** — URL/IP из `ALLOWED_DOMAINS` или `ALLOWED_IPS`, затем профиль Nuclei.
 3. **Проверить код (GitHub)** — `owner/repo` или `https://github.com/owner/repo`.
 4. **Проверить архив** — zip/tar, до `MAX_ARCHIVE_SIZE_MB`.
 5. **Проверить Docker-образ** — имя образа с registry из whitelist.
@@ -181,7 +184,8 @@ MCP stdio ───────────────────────�
 |------------|--------|
 | `BOT_TOKEN` | токен Telegram-бота |
 | `ADMIN_IDS` | кто может пользоваться (fail-closed) |
-| `ALLOWED_DOMAINS` | Nuclei |
+| `ALLOWED_DOMAINS` | Nuclei по имени или точному IP |
+| `ALLOWED_IPS` | Nuclei по точному IP (можно RFC1918; не CIDR, не loopback) |
 | `ALLOWED_GITHUB_ORGS` | clone + SAST |
 | `ALLOWED_DOCKER_REGISTRIES` | Trivy image |
 | `REDIS_URL` | очередь и FSM |

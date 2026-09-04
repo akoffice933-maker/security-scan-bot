@@ -9,12 +9,14 @@ to test may be illegal.
 ## Built-in controls
 
 - Empty `ADMIN_IDS` → process refuses to start.
-- Empty allowlists (`ALLOWED_DOMAINS`, `ALLOWED_GITHUB_ORGS`,
+- Empty allowlists (`ALLOWED_DOMAINS`, `ALLOWED_IPS`, `ALLOWED_GITHUB_ORGS`,
   `ALLOWED_DOCKER_REGISTRIES`) → that scan type is denied.
-- Cloud metadata hosts (`169.254.169.254`, `metadata.google.internal`) are
-  always blocked. Loopback and private IPs are blocked even if they appear
-  in `ALLOWED_DOMAINS`. Before an HTTP/Nuclei scan the hostname is resolved
-  and every address must be global (mitigates DNS rebinding).
+- Cloud metadata hosts (`169.254.169.254`, `metadata.google.internal`) and
+  loopback are always blocked, even if listed. Other IPs (including RFC1918)
+  are allowed **only** when the exact address is in `ALLOWED_IPS` or
+  `ALLOWED_DOMAINS` (no CIDR). Hostname scans still resolve DNS: every
+  address must be global **or** on that IP allowlist (mitigates rebinding).
+  User-facing denials do not include the resolved internal IP.
 - Scanner binaries run via `subprocess` with `shell=False`.
 - Archives are extracted with zip-slip checks and a 200 MB uncompressed cap
   (zip-bomb).

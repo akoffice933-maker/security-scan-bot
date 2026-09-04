@@ -42,9 +42,69 @@ def _canonical_ip(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
     return mapped if mapped is not None else ip
 
 
-def ip_is_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """Deny loopback, private, link-local, CGNAT, metadata — anything not global."""
+def normalize_http_target(value: str) -> str:
+    """Bare IP → https://IP/ so CLI/Telegram can pass an address."""
+    raw = (value or "").strip()
+    host = raw
+    if host.startswith("[") and host.endswith("]") and _is_ip(host[1:-1]):
+        host = host[1:-1]
+    if not _is_ip(host):
+        return raw
+    ip = _canonical_ip(host)
+    if ip.version == 6:
+        return f"https://[{ip}]/"
+    return f"https://{ip}/"
+
+
+def listed_ip_entries(*groups: list[str] | None) -> list[str]:
+    """IP literals from ALLOWED_IPS and ALLOWED_DOMAINS. CIDR ignored."""
+    out: list[str] = []
+    for group in groups:
+        for item in group or []:
+            text = (item or "").strip()
+            if text.startswith("[") and text.endswith("]"):
+                text = text[1:-1]
+            if not text or "/" in text or not _is_ip(text):
+                continue
+            out.append(text)
+    return out
+
+
+def ip_in_allowlist(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    allowed_ips: list[str],
+) -> bool:
+    """Exact address match only. CIDR and hostnames never match."""
+    want = str(ip)
+    for item in allowed_ips:
+        text = (item or "").strip()
+        if text.startswith("[") and text.endswith("]"):
+            text = text[1:-1]
+        if not text or "/" in text:
+            continue
+        if not _is_ip(text):
+            continue
+        if str(_canonical_ip(text)) == want:
+            return True
+    return False
+
+
+def ip_is_always_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Loopback, link-local, metadata, unspecified — never, even if listed."""
     if str(ip) in METADATA_HOSTS:
+        return True
+    return bool(
+        ip.is_loopback
+        or ip.is_unspecified
+        or ip.is_multicast
+        or ip.is_link_local
+        or ip.is_reserved
+    )
+
+
+def ip_is_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Unlisted private/loopback/metadata. Explicit allowlist may override RFC1918."""
+    if ip_is_always_blocked(ip):
         return True
     return not ip.is_global
 
@@ -60,16 +120,28 @@ def resolve_host_ips(host: str) -> list[str]:
     return seen
 
 
-def assert_host_public(host: str) -> tuple[bool, str]:
+def assert_host_public(
+    host: str,
+    *,
+    allowed_domains: list[str] | None = None,
+    allowed_ips: list[str] | None = None,
+) -> tuple[bool, str]:
     """Resolve (if needed) and reject non-public addresses. Closes DNS-rebinding TOCTOU."""
     host = (host or "").lower().rstrip(".")
     if not host:
         return False, "в URL нет хоста"
+    settings = get_settings()
+    listed = listed_ip_entries(
+        allowed_ips if allowed_ips is not None else settings.allowed_ips,
+        allowed_domains if allowed_domains is not None else settings.allowed_domains,
+    )
     if _is_ip(host):
         ip = _canonical_ip(host)
-        if ip_is_blocked(ip):
-            return False, "этот IP заблокирован (не публичный)"
-        return True, ""
+        if ip_is_always_blocked(ip):
+            return False, "этот IP заблокирован"
+        if ip_in_allowlist(ip, listed) or not ip_is_blocked(ip):
+            return True, ""
+        return False, "этот IP заблокирован (не публичный)"
     try:
         ips = resolve_host_ips(host)
     except OSError:
@@ -78,13 +150,14 @@ def assert_host_public(host: str) -> tuple[bool, str]:
         return False, f"нет адресов для {host}"
     for text in ips:
         ip = _canonical_ip(text)
-        if ip_is_blocked(ip):
+        if ip_is_always_blocked(ip) or (ip_is_blocked(ip) and not ip_in_allowlist(ip, listed)):
             logger.info("blocked internal resolution host=%s ip=%s", host, ip)
             return False, f"хост {host} указывает на внутреннюю сеть — скан отклонён"
     return True, ""
 
 
 def assert_url_safe_to_connect(url: str) -> tuple[bool, str]:
+    url = normalize_http_target((url or "").strip())
     ok, reason = allow_url(url)
     if not ok:
         return ok, reason
@@ -111,17 +184,18 @@ def host_in_allowlist(host: str, allowed_domains: list[str]) -> bool:
 def allow_url(
     url: str,
     allowed_domains: list[str] | None = None,
+    *,
+    allowed_ips: list[str] | None = None,
 ) -> tuple[bool, str]:
     domains = (
         allowed_domains
         if allowed_domains is not None
         else get_settings().allowed_domains
     )
-    if not domains:
-        return False, "whitelist доменов пуст — сканирование URL запрещено"
+    ips = allowed_ips if allowed_ips is not None else get_settings().allowed_ips
     if not url or not isinstance(url, str):
-        return False, "нужен http(s) URL"
-    url = url.strip()
+        return False, "нужен http(s) URL или публичный IP из whitelist"
+    url = normalize_http_target(url.strip())
     if len(url) > MAX_URL_LENGTH:
         return False, "URL слишком длинный"
     parsed = urlparse(url)
@@ -136,8 +210,16 @@ def allow_url(
         return False, "этот хост заблокирован (cloud metadata)"
     if _is_ip(host):
         ip = _canonical_ip(host)
-        if ip_is_blocked(ip):
-            return False, "этот IP заблокирован (не публичный)"
+        if ip_is_always_blocked(ip):
+            return False, "этот IP заблокирован"
+        merged = listed_ip_entries(ips, domains)
+        if not merged:
+            return False, "whitelist IP пуст — сканирование по IP запрещено"
+        if not ip_in_allowlist(ip, merged):
+            return False, "этот IP не в whitelist"
+        return True, ""
+    if not domains:
+        return False, "whitelist доменов пуст — сканирование URL запрещено"
     if not host_in_allowlist(host, domains):
         return False, f"хост {host} не в whitelist доменов"
     return True, ""
@@ -187,15 +269,11 @@ def allow_repo(
 def extract_docker_registry(image: str) -> str:
     """Best-effort registry from a docker image reference."""
     ref = image.split("@", 1)[0]
-    # strip tag only if it's on the last path component
-    name = ref
     if "/" in ref:
-        first, rest = ref.split("/", 1)
+        first, _rest = ref.split("/", 1)
         if "." in first or ":" in first or first == "localhost":
-            registry = first
-            return registry.lower()
+            return first.lower()
         return "docker.io"
-    # no slash: official image on docker.io (nginx:latest)
     return "docker.io"
 
 
@@ -231,6 +309,5 @@ def allow_scan(scan_type: str, target: str) -> tuple[bool, str]:
     if scan_type in {"docker", "image"}:
         return allow_image(target)
     if scan_type in {"archive", "file", "file_vt"}:
-        # local files the bot already downloaded; path traversal checked elsewhere
         return True, ""
     return False, f"неизвестный тип сканирования: {scan_type}"

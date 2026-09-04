@@ -5,6 +5,7 @@ from app.services.policy import (
     assert_host_public,
     assert_url_safe_to_connect,
     extract_docker_registry,
+    normalize_http_target,
     parse_github_repo,
 )
 
@@ -26,12 +27,33 @@ def test_url_allows_exact_and_subdomain():
     assert allow_url("http://localhost/health", DOMAINS)[0] is True
 
 
-def test_url_rejects_private_and_loopback_ip_literals():
+def test_url_rejects_loopback_and_metadata_even_if_listed():
     assert allow_url("http://127.0.0.1:8080/", DOMAINS)[0] is False
-    assert allow_url("http://10.0.0.5/", ["10.0.0.5"])[0] is False
-    assert allow_url("http://192.168.1.1/", ["192.168.1.1"])[0] is False
-    assert allow_url("http://172.16.0.1/", ["172.16.0.1"])[0] is False
+    assert allow_url("http://127.0.0.1/", DOMAINS, allowed_ips=["127.0.0.1"])[0] is False
     assert allow_url("http://169.254.1.1/", ["169.254.1.1"])[0] is False
+    assert allow_url("http://169.254.169.254/", DOMAINS, allowed_ips=["169.254.169.254"])[0] is False
+
+
+def test_listed_rfc1918_ips_are_allowed():
+    assert allow_url("http://10.0.0.5/", ["10.0.0.5"])[0] is True
+    assert allow_url("http://192.168.1.1/", ["192.168.1.1"])[0] is True
+    assert allow_url("http://172.16.0.1/", DOMAINS, allowed_ips=["172.16.0.1"])[0] is True
+    assert allow_url("10.0.0.5", [], allowed_ips=["10.0.0.5"])[0] is True
+    assert allow_url("http://10.0.0.6/", ["10.0.0.5"])[0] is False
+
+
+def test_public_ip_allowlist():
+    ips = ["8.8.8.8", "1.1.1.1", "2001:4860:4860::8888"]
+    assert allow_url("https://8.8.8.8/", [], allowed_ips=ips)[0] is True
+    assert allow_url("8.8.8.8", [], allowed_ips=ips)[0] is True
+    assert allow_url("https://1.1.1.1/path", [], allowed_ips=ips)[0] is True
+    assert allow_url("https://[2001:4860:4860::8888]/", [], allowed_ips=ips)[0] is True
+    assert allow_url("https://9.9.9.9/", [], allowed_ips=ips)[0] is False
+    assert allow_url("https://8.8.8.8/", [], allowed_ips=[])[0] is False
+    # CIDR is not an allowlist entry
+    assert allow_url("https://8.8.8.8/", [], allowed_ips=["8.8.8.0/24"])[0] is False
+    assert normalize_http_target("8.8.8.8") == "https://8.8.8.8/"
+    assert normalize_http_target("2001:4860:4860::8888") == "https://[2001:4860:4860::8888]/"
 
 
 def test_url_rejects_suffix_tricks_and_schemes():
@@ -107,7 +129,7 @@ def test_assert_url_safe_requires_allowlist_and_public_ip(monkeypatch):
         "getaddrinfo",
         lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))],
     )
-    ok, _ = assert_url_safe_to_connect("https://example.com/", )
+    ok, _ = assert_url_safe_to_connect("https://example.com/")
     # uses settings allowlist from conftest which includes example.com
     assert ok is True
 

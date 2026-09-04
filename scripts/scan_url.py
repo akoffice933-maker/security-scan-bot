@@ -16,13 +16,13 @@ from app.config import clear_settings_cache, get_settings  # noqa: E402
 from app.db.session import init_db_sync  # noqa: E402
 from app.services import audit, history  # noqa: E402
 from app.services.pipeline import execute_scan  # noqa: E402
-from app.services.policy import allow_url  # noqa: E402
+from app.services.policy import allow_url, normalize_http_target  # noqa: E402
 from app.services.scanners import capabilities  # noqa: E402
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Scan an allowlisted website URL")
-    parser.add_argument("url", help="https://example.com/")
+    parser.add_argument("url", help="https://example.com/ or a public IP from ALLOWED_IPS")
     parser.add_argument(
         "--profile",
         default="all",

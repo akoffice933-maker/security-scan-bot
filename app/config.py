@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     nuclei_templates_dir: str = ""
 
     allowed_domains: StrList = Field(default_factory=list)
+    allowed_ips: StrList = Field(default_factory=list)
     allowed_github_orgs: StrList = Field(default_factory=list)
     allowed_docker_registries: StrList = Field(default_factory=list)
     max_concurrent_scans: int = 2
