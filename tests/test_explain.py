@@ -30,6 +30,17 @@ def test_dos_and_xss_and_gha():
     assert "тег" in gha.lower() or "supply" in gha.lower() or "экшен" in gha.lower()
 
 
+def test_php_eol_and_hsts():
+    php = explain_danger(
+        Finding("httpcheck", "high", "Outdated PHP (EOL)", "PHP 5.3.29", "https://example.com")
+    )
+    assert "php" in php.lower()
+    hsts = explain_danger(
+        Finding("httpcheck", "medium", "Missing HSTS", "no Strict-Transport-Security", "https://x")
+    )
+    assert "hsts" in hsts.lower() or "https" in hsts.lower()
+
+
 def test_enrich_fills_impact():
     result = ScanResult(
         success=True,

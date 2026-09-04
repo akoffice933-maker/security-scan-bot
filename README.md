@@ -15,7 +15,7 @@ English one-liner: *Personal Nuclei / Semgrep / Trivy / ClamAV scanner with a fa
 
 | Цель | Инструменты | Ограничение |
 |------|-------------|-------------|
-| Сайт (URL) | Nuclei | только `ALLOWED_DOMAINS` |
+| Сайт (URL) | Nuclei + заголовки HTTP | только `ALLOWED_DOMAINS` |
 | GitHub-репозиторий | Semgrep, Bandit, Trivy fs, ClamAV | только `ALLOWED_GITHUB_ORGS` |
 | Архив zip/tar | то же + защита от zip-slip | лимит размера |
 | Docker-образ | Trivy image | только `ALLOWED_DOCKER_REGISTRIES` |
@@ -28,7 +28,7 @@ English one-liner: *Personal Nuclei / Semgrep / Trivy / ClamAV scanner with a fa
 - в чат попадают только важные находки (critical / high / medium);
 - очередь **Celery + Redis**;
 - **MCP-сервер** (stdio) для других ИИ-агентов;
-- CLI: `python scripts/scan_repo.py owner/repo`.
+- CLI: `python scripts/scan_repo.py owner/repo`, `python scripts/scan_url.py https://example.com/`.
 
 ---
 

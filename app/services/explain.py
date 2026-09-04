@@ -124,6 +124,25 @@ def explain_danger(finding: Finding) -> str:
             "или выполнить код на сервере, который ресайзит загрузки пользователей."
         )
 
+    if "outdated php" in text or "php eol" in text or "php security-only" in text:
+        return (
+            "Устаревший PHP: дыры больше не закрывают. На ita-подобных стеках это "
+            "часто соседствует с древним CMS. Обновить runtime — обязательный шаг, "
+            "патчи приложения поверх EOL PHP не спасают."
+        )
+
+    if "x-powered-by" in text or "server version disclosure" in text:
+        return (
+            "Заголовок выдаёт версию стека. Атакующему проще подобрать эксплойт "
+            "под конкретный PHP/nginx. Убрать Server/X-Powered-By в конфиге веб-сервера."
+        )
+
+    if "missing hsts" in text or "strict-transport-security" in text:
+        return (
+            "Без HSTS браузер может один раз сходить по HTTP (sslstrip). "
+            "Для публичного сайта нужен Strict-Transport-Security с разумным max-age."
+        )
+
     if "healthcheck" in text:
         return (
             "Без HEALTHCHECK оркестратор не узнает, что контейнер уже мёртв, "

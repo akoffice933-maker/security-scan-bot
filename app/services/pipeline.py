@@ -40,6 +40,7 @@ def execute_scan(payload: dict) -> dict:
 
     status = health.log_status()
     health.cleanup_stale()
+    history.fail_stale_running()
     if not status.ok:
         reason = "диск переполнен — скан отклонён"
         history.finish_scan(scan_id, "failed", summary=reason)

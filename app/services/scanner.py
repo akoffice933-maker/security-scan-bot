@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from app.config import get_settings
-from app.services import scanners, virustotal
+from app.services import httpcheck, scanners, virustotal
 from app.services.archive import extract_archive
 from app.services.findings import Finding, ScanResult
 from app.services.policy import allow_image, allow_repo, allow_url, parse_github_repo
@@ -40,7 +40,12 @@ def scan_url(url: str, profile: str = "cve") -> ScanResult:
     if not ok:
         return ScanResult(success=False, error=reason)
     timeout = get_settings().scan_timeout_seconds
-    return scanners.scan_nuclei(url, profile=profile, timeout=timeout)
+    return _merge(
+        [
+            httpcheck.scan_http(url, timeout=min(20, timeout)),
+            scanners.scan_nuclei(url, profile=profile, timeout=timeout),
+        ]
+    )
 
 
 def scan_repo(repo: str) -> ScanResult:
