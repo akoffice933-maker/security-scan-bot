@@ -2,9 +2,11 @@ from app.services.policy import (
     allow_image,
     allow_repo,
     allow_url,
+    allowlisted_hostname_for_ip,
     assert_host_public,
     assert_url_safe_to_connect,
     extract_docker_registry,
+    named_http_vhost,
     normalize_http_target,
     parse_github_repo,
 )
@@ -100,6 +102,25 @@ def test_docker_registry_extraction():
     assert extract_docker_registry("library/nginx") == "docker.io"
     assert extract_docker_registry("ghcr.io/myorg/app:latest") == "ghcr.io"
     assert extract_docker_registry("localhost:5000/foo:tag") == "localhost:5000"
+
+
+def test_allowlisted_hostname_for_ip(monkeypatch):
+    from app.services import policy as policy_mod
+
+    def fake_resolve(host: str) -> list[str]:
+        if host == "ita-sochi.ru":
+            return ["77.222.40.146"]
+        if host == "mixed.example.com":
+            return ["77.222.40.146", "1.1.1.1"]
+        return []
+
+    monkeypatch.setattr(policy_mod, "resolve_host_ips", fake_resolve)
+    assert allowlisted_hostname_for_ip("77.222.40.146", ["ita-sochi.ru", "localhost"]) == "ita-sochi.ru"
+    assert allowlisted_hostname_for_ip("1.2.3.4", ["ita-sochi.ru"]) is None
+    assert allowlisted_hostname_for_ip("77.222.40.146", ["mixed.example.com"]) is None
+    assert allowlisted_hostname_for_ip("127.0.0.1", ["localhost"]) is None
+    assert named_http_vhost("https://77.222.40.146/", ["ita-sochi.ru"]) == "https://ita-sochi.ru/"
+    assert named_http_vhost("https://ita-sochi.ru/", ["ita-sochi.ru"]) is None
 
 
 def test_dns_rebinding_blocked(monkeypatch):

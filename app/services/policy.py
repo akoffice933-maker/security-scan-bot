@@ -120,6 +120,70 @@ def resolve_host_ips(host: str) -> list[str]:
     return seen
 
 
+def allowlisted_hostname_for_ip(
+    ip_text: str,
+    allowed_domains: list[str] | None = None,
+) -> str | None:
+    """First allowlisted DNS name whose A/AAAA records are exactly this IP."""
+    try:
+        want = str(_canonical_ip(ip_text))
+    except ValueError:
+        return None
+    domains = (
+        allowed_domains
+        if allowed_domains is not None
+        else get_settings().allowed_domains
+    )
+    for raw in domains:
+        host = (raw or "").lower().rstrip(".")
+        if (
+            not host
+            or _is_ip(host)
+            or host in METADATA_HOSTS
+            or host.endswith(".internal")
+            or host == "localhost"
+        ):
+            continue
+        try:
+            resolved = resolve_host_ips(host)
+        except OSError:
+            continue
+        if not resolved:
+            continue
+        canon: list[str] = []
+        skip = False
+        for text in resolved:
+            ip = _canonical_ip(text)
+            if ip_is_always_blocked(ip):
+                skip = True
+                break
+            canon.append(str(ip))
+        if skip or not canon:
+            continue
+        if all(item == want for item in canon):
+            return host
+    return None
+
+
+def named_http_vhost(
+    ip_url: str,
+    allowed_domains: list[str] | None = None,
+) -> str | None:
+    """If the URL host is an IP, the allowlisted DNS name that maps only to it."""
+    parsed = urlparse(ip_url)
+    host = (parsed.hostname or "").lower()
+    if not host or not _is_ip(host):
+        return None
+    name = allowlisted_hostname_for_ip(host, allowed_domains)
+    if not name:
+        return None
+    path = parsed.path or "/"
+    named = f"{parsed.scheme}://{name}{path}"
+    if parsed.query:
+        named += f"?{parsed.query}"
+    return named
+
+
 def assert_host_public(
     host: str,
     *,

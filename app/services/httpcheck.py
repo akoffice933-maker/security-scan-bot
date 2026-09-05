@@ -11,7 +11,11 @@ from email.message import Message
 from urllib.parse import urlparse
 
 from app.services.findings import Finding, ScanResult
-from app.services.policy import assert_url_safe_to_connect, normalize_http_target
+from app.services.policy import (
+    assert_url_safe_to_connect,
+    named_http_vhost,
+    normalize_http_target,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +170,32 @@ def fetch_headers(url: str, timeout: int = 15, *, insecure: bool = False) -> tup
         return headers, final
 
 
+def _vhost_headers(ip_url: str, timeout: int, result: ScanResult) -> list[Finding]:
+    """If the IP belongs to an allowlisted hostname, also read that vhost's headers."""
+    named = named_http_vhost(ip_url)
+    if not named:
+        return []
+    ok, _ = assert_url_safe_to_connect(named)
+    if not ok:
+        return []
+    name = (urlparse(named).hostname or "").lower()
+    result.notes.append(f"vhost: заголовки ещё с {name}")
+    try:
+        headers, final = fetch_headers(named, timeout=timeout, insecure=False)
+    except Exception as exc:
+        if not _is_tls_trust_error(exc):
+            logger.info("httpcheck vhost failed: %s", exc)
+            result.notes.append(f"заголовки {name} не сняты: {str(exc)[:160]}")
+            return []
+        try:
+            headers, final = fetch_headers(named, timeout=timeout, insecure=True)
+        except Exception as exc2:  # noqa: BLE001
+            logger.info("httpcheck vhost failed: %s", exc2)
+            return []
+    https = urlparse(final).scheme == "https"
+    return findings_from_headers(final, headers, https=https)
+
+
 def scan_http(url: str, timeout: int = 15) -> ScanResult:
     url = normalize_http_target(url)
     ok, reason = assert_url_safe_to_connect(url)
@@ -203,6 +233,7 @@ def scan_http(url: str, timeout: int = 15) -> ScanResult:
     except Exception as exc:  # noqa: BLE001
         logger.info("httpcheck failed: %s", exc)
         result.notes.append(f"заголовки не сняты: {str(exc)[:200]}")
+    result.findings.extend(_vhost_headers(url, wait, result))
     result.sort()
     result.stats["httpcheck"] = len(result.findings)
     return result

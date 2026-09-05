@@ -24,12 +24,19 @@ def test_nuclei_argv_timeout_and_parse(monkeypatch):
         return SandboxResult(0, line + "\n", "")
 
     monkeypatch.setattr(scanners, "run_cmd", fake_run)
-    result = scanners.scan_nuclei("https://example.com", "cve", timeout=90)
+    result = scanners.scan_nuclei(
+        "https://example.com",
+        "cve",
+        timeout=90,
+        extra_urls=["https://ita-sochi.ru/"],
+    )
     assert captured["timeout"] == 90
     assert captured["argv"][0] == "nuclei"
-    assert "-u" in captured["argv"]
+    assert captured["argv"].count("-u") == 2
     assert "https://example.com" in captured["argv"]
+    assert "https://ita-sochi.ru/" in captured["argv"]
     assert "-jsonl" in captured["argv"]
+    assert any("ita-sochi.ru" in n for n in result.notes)
     assert all(";" not in a and "|" not in a for a in captured["argv"])
     assert result.success is True
     assert result.findings[0].severity == "high"

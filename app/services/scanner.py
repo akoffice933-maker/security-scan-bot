@@ -15,6 +15,7 @@ from app.services.policy import (
     allow_image,
     allow_repo,
     assert_url_safe_to_connect,
+    named_http_vhost,
     normalize_http_target,
     parse_github_repo,
 )
@@ -47,10 +48,16 @@ def scan_url(url: str, profile: str = "cve") -> ScanResult:
     if not ok:
         return ScanResult(success=False, error=reason)
     timeout = get_settings().scan_timeout_seconds
+    extra: list[str] = []
+    named = named_http_vhost(url)
+    if named:
+        named_ok, _ = assert_url_safe_to_connect(named)
+        if named_ok:
+            extra.append(named)
     return _merge(
         [
             httpcheck.scan_http(url, timeout=min(20, timeout)),
-            scanners.scan_nuclei(url, profile=profile, timeout=timeout),
+            scanners.scan_nuclei(url, profile=profile, timeout=timeout, extra_urls=extra),
         ]
     )
 

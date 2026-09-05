@@ -43,24 +43,32 @@ def _budget(remaining: int, default: int = 120) -> int:
     return max(30, min(remaining, default))
 
 
-def scan_nuclei(url: str, profile: str, timeout: int) -> ScanResult:
+def scan_nuclei(
+    url: str,
+    profile: str,
+    timeout: int,
+    extra_urls: list[str] | None = None,
+) -> ScanResult:
     s = get_settings()
     if not tool_available(s.nuclei_path):
         return ScanResult(success=False, error="Nuclei не установлен", notes=["nuclei not found"])
-    argv = [
-        s.nuclei_path,
-        "-u",
-        url,
-        "-jsonl",
-        "-silent",
-        "-nc",
-        "-severity",
-        "critical,high,medium,low",
-        "-timeout",
-        "10",
-        "-retries",
-        "1",
-    ]
+    targets = [url, *(extra_urls or [])]
+    argv = [s.nuclei_path]
+    for target in targets:
+        argv.extend(["-u", target])
+    argv.extend(
+        [
+            "-jsonl",
+            "-silent",
+            "-nc",
+            "-severity",
+            "critical,high,medium,low",
+            "-timeout",
+            "10",
+            "-retries",
+            "1",
+        ]
+    )
     tags = NUCLEI_TAGS.get(profile, NUCLEI_TAGS["cve"])
     if tags:
         argv.extend(["-tags", ",".join(tags)])
@@ -97,6 +105,8 @@ def scan_nuclei(url: str, profile: str, timeout: int) -> ScanResult:
     if proc.returncode not in {0, 1} and not result.findings:
         result.success = False
         result.error = (proc.stderr or "nuclei failed")[:500]
+    if extra_urls:
+        result.notes.append("vhost: Nuclei ещё на " + ", ".join(extra_urls))
     result.sort()
     result.stats["nuclei"] = len(result.findings)
     return result

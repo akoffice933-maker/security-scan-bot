@@ -70,13 +70,37 @@ def test_scan_http_retries_after_self_signed_cert(monkeypatch):
     assert result.success is True
 
 
+def test_scan_http_adds_vhost_headers_for_allowlisted_domain(monkeypatch):
+    from email.message import Message
+
+    from app.services import httpcheck as hc
+
+    def fake_fetch(url, timeout=15, *, insecure=False):
+        msg = Message()
+        if "ita-sochi.ru" in url:
+            msg["X-Powered-By"] = "PHP/5.3.29"
+        else:
+            msg["Server"] = "nginx/1.31.3"
+        return msg, url
+
+    monkeypatch.setattr(hc, "assert_url_safe_to_connect", lambda url: (True, ""))
+    monkeypatch.setattr(hc, "named_http_vhost", lambda url: "https://ita-sochi.ru/")
+    monkeypatch.setattr(hc, "fetch_headers", fake_fetch)
+    result = hc.scan_http("https://77.222.40.146/")
+    titles = {f.title for f in result.findings}
+    assert "Server version disclosure" in titles
+    assert "Outdated PHP (EOL)" in titles
+    assert any("ita-sochi.ru" in n for n in result.notes)
+
+
 def test_scan_url_normalizes_bare_ip_for_both_scanners(monkeypatch):
     from app.services import httpcheck, scanners
     from app.services.findings import ScanResult
     from app.services import scanner as scan_mod
 
-    seen: list[tuple[str, str]] = []
+    seen: list[tuple] = []
     monkeypatch.setattr(scan_mod, "assert_url_safe_to_connect", lambda url: (True, ""))
+    monkeypatch.setattr(scan_mod, "named_http_vhost", lambda url: None)
     monkeypatch.setattr(
         httpcheck,
         "scan_http",
@@ -85,14 +109,39 @@ def test_scan_url_normalizes_bare_ip_for_both_scanners(monkeypatch):
     monkeypatch.setattr(
         scanners,
         "scan_nuclei",
-        lambda url, profile, timeout: seen.append(("nuclei", url)) or ScanResult(success=True),
+        lambda url, profile, timeout, extra_urls=None: seen.append(("nuclei", url, extra_urls))
+        or ScanResult(success=True),
     )
     result = scan_url("8.8.8.8", profile="cve")
     assert result.success is True
     assert seen == [
         ("http", "https://8.8.8.8/"),
-        ("nuclei", "https://8.8.8.8/"),
+        ("nuclei", "https://8.8.8.8/", []),
     ]
+
+
+def test_scan_url_adds_nuclei_vhost_target(monkeypatch):
+    from app.services import httpcheck, scanners
+    from app.services.findings import ScanResult
+    from app.services import scanner as scan_mod
+
+    seen: list[tuple] = []
+    monkeypatch.setattr(scan_mod, "assert_url_safe_to_connect", lambda url: (True, ""))
+    monkeypatch.setattr(scan_mod, "named_http_vhost", lambda url: "https://ita-sochi.ru/")
+    monkeypatch.setattr(
+        httpcheck,
+        "scan_http",
+        lambda url, timeout=15: ScanResult(success=True),
+    )
+    monkeypatch.setattr(
+        scanners,
+        "scan_nuclei",
+        lambda url, profile, timeout, extra_urls=None: seen.append((url, extra_urls))
+        or ScanResult(success=True),
+    )
+    result = scan_url("77.222.40.146", profile="cve")
+    assert result.success is True
+    assert seen == [("https://77.222.40.146/", ["https://ita-sochi.ru/"])]
 
 
 def test_scan_url_merges_headers(monkeypatch):
@@ -112,7 +161,7 @@ def test_scan_url_merges_headers(monkeypatch):
     monkeypatch.setattr(
         scanners,
         "scan_nuclei",
-        lambda url, profile, timeout: ScanResult(
+        lambda url, profile, timeout, extra_urls=None: ScanResult(
             success=True,
             findings=[Finding("nuclei", "high", "Joomla SQLi", "cve", url)],
         ),
