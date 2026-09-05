@@ -11,7 +11,7 @@ from app.services.explain import enrich_result
 from app.services.export import export_all_formats
 from app.services.llm import summarize_sync
 from app.services.notify import format_chat_report, notify_sync
-from app.services.policy import allow_scan
+from app.services.policy import allow_scan, normalize_http_target
 from app.services.textutil import mask_secrets
 
 logger = logging.getLogger(__name__)
@@ -21,6 +21,8 @@ def execute_scan(payload: dict) -> dict:
     scan_id = int(payload["scan_id"])
     scan_type = str(payload["scan_type"])
     target = str(payload["target"])
+    if scan_type == "url":
+        target = normalize_http_target(target)
     user_id = int(payload.get("user_id") or 0)
     chat_id = payload.get("chat_id")
     options = payload.get("options") or {}

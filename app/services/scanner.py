@@ -11,7 +11,13 @@ from app.config import get_settings
 from app.services import httpcheck, scanners, virustotal
 from app.services.archive import extract_archive
 from app.services.findings import Finding, ScanResult
-from app.services.policy import allow_image, allow_repo, assert_url_safe_to_connect, parse_github_repo
+from app.services.policy import (
+    allow_image,
+    allow_repo,
+    assert_url_safe_to_connect,
+    normalize_http_target,
+    parse_github_repo,
+)
 from app.services.sandbox import run_cmd
 
 logger = logging.getLogger(__name__)
@@ -36,6 +42,7 @@ def _merge(parts: list[ScanResult]) -> ScanResult:
 
 
 def scan_url(url: str, profile: str = "cve") -> ScanResult:
+    url = normalize_http_target(url)
     ok, reason = assert_url_safe_to_connect(url)
     if not ok:
         return ScanResult(success=False, error=reason)

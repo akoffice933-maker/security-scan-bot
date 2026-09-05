@@ -1,3 +1,4 @@
+import urllib.error
 from email.message import Message
 
 from app.services.httpcheck import findings_from_headers, scan_http
@@ -42,13 +43,64 @@ def test_scan_http_denied():
     assert result.success is False
 
 
+def test_scan_http_retries_after_self_signed_cert(monkeypatch):
+    from email.message import Message
+
+    from app.services import httpcheck as hc
+
+    calls: list[bool] = []
+
+    def fake_fetch(url, timeout=15, *, insecure=False):
+        calls.append(insecure)
+        if not insecure:
+                raise urllib.error.URLError(
+                    "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate"
+                )
+        msg = Message()
+        msg["X-Powered-By"] = "PHP/5.3.29"
+        return msg, url
+
+    monkeypatch.setattr(hc, "assert_url_safe_to_connect", lambda url: (True, ""))
+    monkeypatch.setattr(hc, "fetch_headers", fake_fetch)
+    result = hc.scan_http("https://8.8.8.8/")
+    assert calls == [False, True]
+    titles = {f.title for f in result.findings}
+    assert "Untrusted TLS certificate" in titles
+    assert "Outdated PHP (EOL)" in titles
+    assert result.success is True
+
+
+def test_scan_url_normalizes_bare_ip_for_both_scanners(monkeypatch):
+    from app.services import httpcheck, scanners
+    from app.services.findings import ScanResult
+    from app.services import scanner as scan_mod
+
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(scan_mod, "assert_url_safe_to_connect", lambda url: (True, ""))
+    monkeypatch.setattr(
+        httpcheck,
+        "scan_http",
+        lambda url, timeout=15: seen.append(("http", url)) or ScanResult(success=True),
+    )
+    monkeypatch.setattr(
+        scanners,
+        "scan_nuclei",
+        lambda url, profile, timeout: seen.append(("nuclei", url)) or ScanResult(success=True),
+    )
+    result = scan_url("8.8.8.8", profile="cve")
+    assert result.success is True
+    assert seen == [
+        ("http", "https://8.8.8.8/"),
+        ("nuclei", "https://8.8.8.8/"),
+    ]
+
+
 def test_scan_url_merges_headers(monkeypatch):
     from app.services import httpcheck, scanners
     from app.services.findings import Finding, ScanResult
     from app.services import scanner as scan_mod
 
     monkeypatch.setattr(scan_mod, "assert_url_safe_to_connect", lambda url: (True, ""))
-
     monkeypatch.setattr(
         httpcheck,
         "scan_http",

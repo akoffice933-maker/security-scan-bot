@@ -11,7 +11,7 @@ from email.message import Message
 from urllib.parse import urlparse
 
 from app.services.findings import Finding, ScanResult
-from app.services.policy import assert_url_safe_to_connect
+from app.services.policy import assert_url_safe_to_connect, normalize_http_target
 
 logger = logging.getLogger(__name__)
 
@@ -125,13 +125,40 @@ def findings_from_headers(url: str, headers: Message | dict, https: bool) -> lis
     return items
 
 
-def fetch_headers(url: str, timeout: int = 15) -> tuple[Message, str]:
+def _ssl_context(*, insecure: bool) -> ssl.SSLContext:
+    if insecure:
+        ctx = ssl._create_unverified_context()
+        ctx.check_hostname = False
+        return ctx
+    return ssl.create_default_context()
+
+
+def _is_tls_trust_error(exc: BaseException) -> bool:
+    reason = getattr(exc, "reason", None)
+    parts = [str(exc), type(exc).__name__]
+    if reason is not None:
+        parts.append(str(reason))
+        parts.append(type(reason).__name__)
+    text = " ".join(parts).lower()
+    markers = (
+        "certificate_verify_failed",
+        "certificate verify failed",
+        "self-signed",
+        "sslcerterror",
+        "sslcertverificationerror",
+    )
+    if any(m in text for m in markers):
+        return True
+    return isinstance(exc, ssl.SSLError) or isinstance(reason, ssl.SSLError)
+
+
+def fetch_headers(url: str, timeout: int = 15, *, insecure: bool = False) -> tuple[Message, str]:
     req = urllib.request.Request(
         url,
         method="GET",
         headers={"User-Agent": USER_AGENT, "Accept": "*/*"},
     )
-    https = urllib.request.HTTPSHandler(context=ssl.create_default_context())
+    https = urllib.request.HTTPSHandler(context=_ssl_context(insecure=insecure))
     opener = urllib.request.build_opener(https, _AllowlistRedirect())
     with opener.open(req, timeout=timeout) as resp:  # nosec B310 — allowlisted http(s) only
         final = str(getattr(resp, "url", url) or url)
@@ -140,17 +167,38 @@ def fetch_headers(url: str, timeout: int = 15) -> tuple[Message, str]:
 
 
 def scan_http(url: str, timeout: int = 15) -> ScanResult:
+    url = normalize_http_target(url)
     ok, reason = assert_url_safe_to_connect(url)
     if not ok:
         return ScanResult(success=False, error=reason)
     result = ScanResult(success=True)
+    wait = max(5, min(timeout, 30))
     try:
-        headers, final = fetch_headers(url, timeout=max(5, min(timeout, 30)))
+        try:
+            headers, final = fetch_headers(url, timeout=wait, insecure=False)
+        except Exception as exc:
+            if urlparse(url).scheme != "https" or not _is_tls_trust_error(exc):
+                raise
+            logger.info("httpcheck: retry without TLS verify after %s", exc)
+            result.findings.append(
+                Finding(
+                    scanner="httpcheck",
+                    severity="medium",
+                    title="Untrusted TLS certificate",
+                    description=(
+                        "Сертификат не проходит проверку (self-signed или просрочен). "
+                        "Заголовки сняты без проверки цепочки — только для allowlisted цели."
+                    ),
+                    location=url,
+                )
+            )
+            result.notes.append("TLS: сертификат не доверен, заголовки сняты повторным запросом")
+            headers, final = fetch_headers(url, timeout=wait, insecure=True)
         https = urlparse(final).scheme == "https"
-        result.findings = findings_from_headers(final, headers, https=https)
+        result.findings.extend(findings_from_headers(final, headers, https=https))
     except urllib.error.HTTPError as exc:
         https = urlparse(url).scheme == "https"
-        result.findings = findings_from_headers(url, exc.headers or Message(), https=https)
+        result.findings.extend(findings_from_headers(url, exc.headers or Message(), https=https))
         result.notes.append(f"HTTP {exc.code} при проверке заголовков")
     except Exception as exc:  # noqa: BLE001
         logger.info("httpcheck failed: %s", exc)

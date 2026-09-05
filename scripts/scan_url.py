@@ -39,20 +39,21 @@ def main() -> int:
     init_db_sync()
 
     print("Capabilities:", json.dumps(capabilities(), indent=2))
-    ok, reason = allow_url(args.url)
+    url = normalize_http_target(args.url)
+    ok, reason = allow_url(url)
     if not ok:
-        audit.write_event(0, "scan_denied", "url", args.url, None, reason)
+        audit.write_event(0, "scan_denied", "url", url, None, reason)
         print(f"DENIED: {reason}", file=sys.stderr)
         return 2
 
-    scan_id = history.create_scan(0, "url", args.url)
-    audit.write_event(0, "scan_requested", "url", args.url, scan_id, "cli")
+    scan_id = history.create_scan(0, "url", url)
+    audit.write_event(0, "scan_requested", "url", url, scan_id, "cli")
     result = execute_scan(
         {
             "scan_id": scan_id,
             "user_id": 0,
             "scan_type": "url",
-            "target": args.url,
+            "target": url,
             "chat_id": None,
             "options": {"profile": args.profile},
         }
