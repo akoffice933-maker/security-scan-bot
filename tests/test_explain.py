@@ -49,3 +49,35 @@ def test_enrich_fills_impact():
     enrich_result(result)
     assert result.findings[0].impact
     assert "код" in result.findings[0].impact.lower() or "сервер" in result.findings[0].impact.lower()
+
+
+def test_filename_keywords_do_not_hijack_explanation():
+    # регрессия: «make_eval_corpus.py» ловил RCE-текст из-за подстроки «eval» в пути
+    b311s = [
+        Finding(
+            "bandit",
+            "low",
+            "B311",
+            "Standard pseudo-random generators are not suitable "
+            "for security/cryptographic purposes.",
+            f"repo/scripts/{name}.py:{line}",
+        )
+        for name, line in (("make_adversarial_corpus", 129), ("make_eval_corpus", 173))
+    ]
+    impacts = {explain_danger(f) for f in b311s}
+    assert len(impacts) == 1
+    assert "низкий риск" in next(iter(impacts)).lower()
+
+
+def test_source_map_is_not_rce():
+    # «rce» — подстрока «source»: source map не должен получать RCE-текст
+    sm = explain_danger(
+        Finding(
+            "nuclei",
+            "medium",
+            "Anything",
+            "The page exposes a source map with original sources",
+            "https://x/bundle.js.map",
+        )
+    )
+    assert "утечка" in sm.lower()
